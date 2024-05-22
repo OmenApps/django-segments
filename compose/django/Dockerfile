@@ -24,10 +24,10 @@ RUN --mount=type=cache,target=/var/cache/apt,sharing=locked \
     apt update \
     && apt-get --no-install-recommends install -y \
     # Some basic tools and libraries
-    bash curl wget git make \
+    bash curl wget git make software-properties-common \
     build-essential libssl-dev zlib1g-dev libbz2-dev libreadline-dev \
     libsqlite3-dev llvm libncurses5-dev libncursesw5-dev xz-utils tk-dev \
-    libxml2-dev libxmlsec1-dev libffi-dev liblzma-dev \
+    libxml2-dev libxmlsec1-dev libffi-dev liblzma-dev  \
     # psycopg2 dependencies
     libpq-dev
 
@@ -50,7 +50,6 @@ RUN if [ "$MULTIPLE_PYTHON" = "True" ] ; then \
 RUN eval "$(pyenv init -)"
 
 # Add deadsnakes PPA
-RUN apt-get install -y software-properties-common
 RUN add-apt-repository 'ppa:deadsnakes/ppa'
 RUN apt-get update
 
