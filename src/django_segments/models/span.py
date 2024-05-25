@@ -4,22 +4,16 @@ from django.db import models
 from django.utils.translation import gettext as _
 
 from django_segments.app_settings import ALLOW_GAPS
-from django_segments.app_settings import SEGMENT_MODEL_BASE as ModelBase
 from django_segments.app_settings import SOFT_DELETE
 from django_segments.app_settings import STICKY_BOUNDARIES
-from django_segments.base import BoundaryHelper
-from django_segments.base import ConcreteModelValidationHelper
-from django_segments.base import RangeTypesMatchHelper
-from django_segments.base import SpanCurrentRangeValidationHelper
-from django_segments.base import SpanInitialRangeValidationHelper
-from django_segments.exceptions import IncorrectSpanRangeError
-from django_segments.exceptions import IncorrectSubclassError
+from django_segments.models.base import AbstractSegmentMetaclass
+from django_segments.models.base import BoundaryHelper
 
 
 logger = logging.getLogger(__name__)
 
 
-class AbstractSpan(ModelBase):
+class AbstractSpan(models.Model, metaclass=AbstractSegmentMetaclass):
     """Abstract class from which all span models should inherit.
 
     All concrete subclasses of AbstractSpan must define either `initial_range_field_name` (a string representing the
@@ -70,42 +64,6 @@ class AbstractSpan(ModelBase):
             "sticky_boundaries": self.Config.sticky_boundaries,
             "soft_delete": self.Config.soft_delete,
         }
-
-    def __new__(cls, name, bases, attrs, **kwargs):
-        """Validates subclass of AbstractSpan & sets initial_range_field and current_range_field for the model."""
-        try:
-            model = super().__new__(cls, name, bases, attrs, **kwargs)  # pylint: disable=E1121
-
-            for base in bases:
-                if base.__name__ == "AbstractSpan":
-                    # Ensure that the model is not abstract
-                    concrete_validation_helper = ConcreteModelValidationHelper(model)
-                    concrete_validation_helper.check_model_is_concrete()
-
-                    # Ensure that the initial_range field is valid
-                    span_initial_range_validation_helper = SpanInitialRangeValidationHelper(model)
-                    initial_range_field = span_initial_range_validation_helper.get_validated_initial_range_field()
-                    model.initial_range_field = initial_range_field
-
-                    # Ensure that the current_range field is valid
-                    span_current_range_validation_helper = SpanCurrentRangeValidationHelper(model)
-                    current_range_field = span_current_range_validation_helper.get_validated_current_range_field()
-                    model.current_range_field = current_range_field
-
-                    # Ensure that the initial_range field and current_range field have the same type
-                    range_types_match_helper = RangeTypesMatchHelper(initial_range_field, current_range_field)
-                    range_types_match_helper.validate_range_types_match()
-
-            return model
-        except IncorrectSubclassError as e:
-            logger.error("Incorrect subclass usage in %s: %s", name, str(e))
-            raise e
-        except IncorrectSpanRangeError as e:
-            logger.error("Incorrect span usage in %s: %s", name, str(e))
-            raise e
-        except Exception as e:
-            logger.error("Error in %s: %s", name, str(e))
-            raise e
 
     def get_segment_class(self):
         """Get the segment class from the instance, useful when creating new segments dynamically.

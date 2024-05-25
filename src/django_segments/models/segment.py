@@ -1,24 +1,17 @@
 import logging
 
-from django.core.exceptions import ImproperlyConfigured
 from django.db import models
 from django.utils.translation import gettext as _
 
 from django_segments.app_settings import ON_DELETE_FOR_PREVIOUS
-from django_segments.app_settings import SEGMENT_MODEL_BASE as ModelBase
-from django_segments.base import BoundaryHelper
-from django_segments.base import ConcreteModelValidationHelper
-from django_segments.base import RangeTypesMatchHelper
-from django_segments.exceptions import IncorrectSegmentRangeError
-from django_segments.exceptions import IncorrectSubclassError
-from django_segments.exceptions import SegmentRangeValidationHelper
-from django_segments.exceptions import SegmentSpanValidationHelper
+from django_segments.models.base import AbstractSegmentMetaclass
+from django_segments.models.base import BoundaryHelper
 
 
 logger = logging.getLogger(__name__)
 
 
-class AbstractSegment(ModelBase):
+class AbstractSegment(models.Model, metaclass=AbstractSegmentMetaclass):
     """Abstract class from which all segment models should inherit.
 
     All concrete subclasses of AbstractSegment must define either `segment_range_field_name` (a string representing the
@@ -68,49 +61,6 @@ class AbstractSegment(ModelBase):
             models.Index(fields=["segment_range"]),
             models.Index(fields=["deleted_at"]),
         ]
-
-    def __new__(cls, name, bases, attrs, **kwargs):
-        """Validates subclass of AbstractSegment and sets segment_range_field for the concrete model."""
-        try:
-            model = super().__new__(cls, name, bases, attrs, **kwargs)  # pylint: disable=E1121
-
-            for base in bases:
-                if base.__name__ == "AbstractSegment":
-                    # Ensure that the model is not abstract
-                    concrete_validation_helper = ConcreteModelValidationHelper(model)
-                    concrete_validation_helper.check_model_is_concrete()
-
-                    # Ensure that the segment_range field is valid
-                    segment_validation_helper = SegmentRangeValidationHelper(model)
-                    segment_range_field = segment_validation_helper.get_validated_segment_range_field()
-                    model.segment_range_field = segment_range_field
-
-                    # Ensure that the segment_span field is valid
-                    segment_span_validation_helper = SegmentSpanValidationHelper(model)
-                    segment_span_field = segment_span_validation_helper.get_validated_segment_span_field()
-                    model.segment_span_field = segment_span_field
-
-                    # Ensure that the segment_range field and span's initial_range field have the same type
-                    segment_span_initial_range_field = getattr(segment_span_field, "initial_range", None)
-                    range_types_match_helper = RangeTypesMatchHelper(
-                        segment_range_field,
-                        segment_span_initial_range_field,
-                    )
-                    range_types_match_helper.validate_range_types_match()
-
-            return model
-        except IncorrectSubclassError as e:
-            logger.error("Incorrect subclass usage in %s: %s", name, str(e))
-            raise e
-        except IncorrectSegmentRangeError as e:
-            logger.error("Incorrect segment usage in %s: %s", name, str(e))
-            raise e
-        except ImproperlyConfigured as e:
-            logger.error("Improperly configured in %s: %s", name, str(e))
-            raise e
-        except Exception as e:
-            logger.error("Error in %s: %s", name, str(e))
-            raise e
 
     def set_lower_boundary(self, value):
         """Set the lower boundary of the range field."""

@@ -15,7 +15,7 @@ logger = logging.getLogger(__name__)
 
 
 # There is likely no reason ever to change the model base, but it is provided as an setting here for completeness.
-SEGMENT_MODEL_BASE = getattr(settings, "SEGMENT_MODEL_BASE", ModelBase)
+DJANGO_SEGMENTS_MODEL_BASE = getattr(settings, "DJANGO_SEGMENTS_MODEL_BASE", ModelBase)
 
 # Define the allowed PostgreSQL range field types
 POSTGRES_RANGE_FIELDS = getattr(
