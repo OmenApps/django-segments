@@ -4,8 +4,11 @@ from django.db import models
 from django.db import transaction
 from django.db.models.expressions import F
 from django.utils import timezone
+from psycopg2.extras import Range  # psycopg2's base range class
 
 from django_segments.helpers.base import BaseHelper
+from django_segments.signals import segment_created
+from django_segments.signals import span_created
 
 
 logger = logging.getLogger(__name__)
@@ -23,27 +26,19 @@ class CreateSpanHelper(SpanHelperBase):
     """Helper class for creating spans."""
 
     @transaction.atomic
-    def create(self, *args, **kwargs):
+    def create(self, *args, range_value: Range = None, **kwargs):
         """Create a new Span instance with initial_range and current_range fields set.
 
         Optionally create an initial Segment that spans the entire range if needed.
         """
-        # Check and initialize range values in kwargs
-        initial_range = kwargs.get("initial_range", self.get_default_range_value())
-        current_range = kwargs.get("current_range", initial_range)
-        kwargs.update(
-            {
-                "initial_range": initial_range,
-                "current_range": current_range,
-            }
-        )
+        # Initialize range values in kwargs
+        kwargs.update({"initial_range": range_value, "current_range": range_value})
 
         # Create the Span instance
         span_instance = self.obj.__class__.objects.create(*args, **kwargs)
+        span_created.send(sender=self.obj.__class__, instance=span_instance)  # Send signal
 
-        # Optionally create an initial Segment
-        if self.config_dict.get("create_initial_segment", False):
-            self.create_initial_segment(span_instance)
+        self.create_initial_segment(span_instance)
 
         return span_instance
 
@@ -53,4 +48,5 @@ class CreateSpanHelper(SpanHelperBase):
         segment_range = self.obj.current_range
 
         segment = segment_class.objects.create(segment_span=obj, segment_range_field=segment_range)
+        segment_created.send(sender=segment_class, instance=segment)  # Send signal
         return segment

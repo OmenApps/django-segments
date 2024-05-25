@@ -30,7 +30,7 @@ class ConcreteModelValidationHelper:  # pylint: disable=R0903
 
     def check_model_is_concrete(self) -> None:
         """Ensure that the model is not abstract."""
-        if self.model._meta.abstract:  # pylint: disable=protected-access
+        if self.model._meta.abstract:  # pylint: disable=W0212
             raise IncorrectSubclassError("Concrete subclasses must not be abstract")
 
 
@@ -109,7 +109,7 @@ class RangeValidationHelper:
     def get_range_field_name_instance(self) -> models.Field:
         """Return the range field instance."""
         try:
-            return self.model._meta.get_field(self.range_field_name)  # pylint: disable=protected-access
+            return self.model._meta.get_field(self.range_field_name)  # pylint: disable=W0212
         except FieldDoesNotExist as e:
             raise self.error_class(
                 f"{self.range_field_name_attr} '{self.range_field_name}' does not exist on {self.model.__name__}"
@@ -247,7 +247,7 @@ class AbstractSpan(ModelBase):
     def __new__(cls, name, bases, attrs, **kwargs):
         """Validates subclass of AbstractSpan & sets initial_range_field and current_range_field for the model."""
         try:
-            model = super().__new__(cls, name, bases, attrs, **kwargs)  # pylint: disable=too-many-function-args
+            model = super().__new__(cls, name, bases, attrs, **kwargs)  # pylint: disable=E1121
 
             for base in bases:
                 if base.__name__ == "AbstractSpan":
@@ -279,6 +279,14 @@ class AbstractSpan(ModelBase):
         except Exception as e:
             logger.error("Error in %s: %s", name, str(e))
             raise e
+
+    def get_segment_class(self):
+        """Get the segment class from the instance, useful when creating new segments dynamically.
+
+        This method accesses the reverse relation from the segment model to the span model.
+        """
+        # return self.segment_span.field.related_model
+        return self.segment_span.field
 
     def set_initial_lower_boundary(self, value):
         """Set the lower boundary of the initial range field.
@@ -313,6 +321,20 @@ class AbstractSpan(ModelBase):
             model=self, range_field_name_attr="current_range_field_name", range_field_attr="current_range"
         )
         boundary_helper.set_upper_boundary(value)
+
+    def get_segments(self):
+        """Return all segments associated with the span."""
+        return self.segment_span.all()
+
+    @property
+    def first_segment(self):
+        """Return the first segment associated with the span."""
+        return self.segment_span.exclude(deleted_at__isnull=False).earliest("segment_range")
+
+    @property
+    def last_segment(self):
+        """Return the last segment associated with the span."""
+        return self.segment_span.exclude(deleted_at__isnull=False).latest("segment_range")
 
 
 class SegmentRangeValidationHelper(RangeValidationHelper):
@@ -357,13 +379,12 @@ class SegmentSpanValidationHelper:
 
         if self.segment_span_field_name is not None:
             return self.get_segment_span_field_instance()
-        else:
-            return self.segment_span
+        return self.segment_span
 
     def get_segment_span_field_instance(self) -> models.Field:
         """Return the segment span field instance."""
         try:
-            return self.model._meta.get_field(self.segment_span_field_name)  # pylint: disable=protected-access
+            return self.model._meta.get_field(self.segment_span_field_name)  # pylint: disable=W0212
         except FieldDoesNotExist as e:
             raise ImproperlyConfigured(
                 f"segment_span_field_name '{self.segment_span_field_name}' does not exist on {self.model.__name__}"
@@ -424,7 +445,7 @@ class AbstractSegment(ModelBase):
     def __new__(cls, name, bases, attrs, **kwargs):
         """Validates subclass of AbstractSegment and sets segment_range_field for the concrete model."""
         try:
-            model = super().__new__(cls, name, bases, attrs, **kwargs)  # pylint: disable=too-many-function-args
+            model = super().__new__(cls, name, bases, attrs, **kwargs)  # pylint: disable=E1121
 
             for base in bases:
                 if base.__name__ == "AbstractSegment":
