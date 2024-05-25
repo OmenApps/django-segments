@@ -2,7 +2,6 @@
 
 import logging
 
-from django.apps import apps
 from django.core.exceptions import FieldDoesNotExist
 from django.core.exceptions import ImproperlyConfigured
 from django.db import models
@@ -270,7 +269,10 @@ class AbstractSpanMetaclass(ModelBase):  # pylint: disable=R0903
     """Metaclass for AbstractSpan."""
 
     def __new__(cls, name, bases, attrs, **kwargs):
-        """Validates subclass of AbstractSpan & sets initial_range_field and current_range_field for the model."""
+        """Performs actions that need to take place when a new span model is created.
+
+        Validates subclass of AbstractSpan & sets initial_range_field and current_range_field for the model.
+        """
         logger.debug("Creating new span model: %s", name)
 
         model = super().__new__(cls, name, bases, attrs, **kwargs)  # pylint: disable=E1121
@@ -293,12 +295,15 @@ class AbstractSpanMetaclass(ModelBase):  # pylint: disable=R0903
 
                 # Ensure that the initial_range field and current_range field have the same type
                 logger.debug(
-                    "AbstractSpanMetaclass Passing to RangeTypesMatchHelper: %s, %s",
+                    "AbstractSpanMetaclass passing to RangeTypesMatchHelper: %s, %s",
                     type(initial_range_field),
                     type(current_range_field),
                 )
                 range_types_match_helper = RangeTypesMatchHelper(initial_range_field, current_range_field)
                 range_types_match_helper.validate_range_types_match()
+
+        # Log the `dir` of the model
+        logger.debug("AbstractSpanMetaclass dir(model): %s", dir(model))
 
         return model
 
@@ -307,7 +312,10 @@ class AbstractSegmentMetaclass(ModelBase):  # pylint: disable=R0903
     """Metaclass for AbstractSegment."""
 
     def __new__(cls, name, bases, attrs, **kwargs):
-        """Validates subclass of AbstractSegment and sets segment_range_field for the concrete model."""
+        """Performs actions that need to take place when a new segment model is created.
+
+        Validates subclass of AbstractSegment & sets segment_range_field and segment_span_field for the concrete model.
+        """
         logger.debug("Creating new segment model: %s", name)
 
         model = super().__new__(cls, name, bases, attrs, **kwargs)  # pylint: disable=E1121
@@ -344,6 +352,11 @@ class AbstractSegmentMetaclass(ModelBase):  # pylint: disable=R0903
                                 f"{related_model.__name__} must have an 'initial_range_field' attribute"
                             )
 
+                        logger.debug(
+                            "AbstractSegmentMetaclass passing to RangeTypesMatchHelper: %s, %s",
+                            type(segment_range_field),
+                            type(segment_span_initial_range_field),
+                        )
                         range_types_match_helper = RangeTypesMatchHelper(
                             segment_range_field,
                             segment_span_initial_range_field,
@@ -351,5 +364,8 @@ class AbstractSegmentMetaclass(ModelBase):  # pylint: disable=R0903
                         range_types_match_helper.validate_range_types_match()
 
         class_prepared.connect(late_binding, sender=model)
+
+        # Log the `dir` of the model
+        logger.debug("AbstractSegmentMetaclass dir(model): %s", dir(model))
 
         return model
