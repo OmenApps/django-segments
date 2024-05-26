@@ -17,7 +17,8 @@ logger = logging.getLogger(__name__)
 # There is likely no reason ever to change the model base, but it is provided as an setting here for completeness.
 DJANGO_SEGMENTS_MODEL_BASE = getattr(settings, "DJANGO_SEGMENTS_MODEL_BASE", ModelBase)
 
-# Define the allowed PostgreSQL range field types
+# Define the allowed PostgreSQL range field types as a dictionary where the key is the field name and the value is the
+# Python type that should be used to represent the range field.
 POSTGRES_RANGE_FIELDS = getattr(
     settings,
     "POSTGRES_RANGE_FIELDS",
@@ -40,7 +41,8 @@ POSTGRES_RANGE_FIELDS = getattr(
 # - models.DO_NOTHING
 ON_DELETE_FOR_PREVIOUS = getattr(settings, "ON_DELETE_FOR_PREVIOUS", models.CASCADE)
 
-# Global configuration settings for Span models
+# Global configuration settings for Span models. These settings can be overridden by setting the same attributes on the
+# concrete Span model.
 ALLOW_GAPS = getattr(settings, "ALLOW_GAPS", True)
 STICKY_BOUNDARIES = getattr(settings, "STICKY_BOUNDARIES", True)
 SOFT_DELETE = getattr(settings, "SOFT_DELETE", True)
