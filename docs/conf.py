@@ -19,8 +19,8 @@ autodoc_typehints = "description"
 html_theme = "furo"
 
 # Add package path to sys.path
-sys.path.insert(0, os.path.join(os.path.abspath('.'), '../'))
-os.environ['DJANGO_SETTINGS_MODULE'] = 'tests.settings'
+sys.path.insert(0, os.path.join(os.path.abspath("."), "../"))
+os.environ["DJANGO_SETTINGS_MODULE"] = "tests.settings"
 
 # Initialize Django
 django.setup()
