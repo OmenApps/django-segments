@@ -5,24 +5,20 @@ from django.utils.translation import gettext as _
 
 from django_segments.app_settings import ON_DELETE_FOR_PREVIOUS
 from django_segments.models.base import AbstractSegmentMetaclass
-from django_segments.models.base import BoundaryHelper
+from django_segments.models.base import boundary_helper_factory
 
 
 logger = logging.getLogger(__name__)
 
 
 class AbstractSegment(models.Model, metaclass=AbstractSegmentMetaclass):
-    """Abstract class from which all segment models should inherit.
+    """Abstract class from which all Segment models should inherit.
 
     All concrete subclasses of AbstractSegment must define either `segment_range_field_name` (a string representing the
     name of the range field) or `segment_range` (a range field instance). If both or neither are defined, an
     IncorrectSegmentError will be raised.
 
-    All concrete subclasses of AbstractSegment must define either `segment_span_field_name` (a string representing the
-    name of the foreign key field) or `segment_span` (a foreign key field instance). If both or neither are defined, an
-    IncorrectSegmentError will be raised.
-
-    When the concrete subclass is created, the segment_range_field and segment_span_field attributes are set to the
+    When the concrete subclass is created, the `segment_range_field` and `segment_span_field` attributes are set to the
     range field and foreign key field instances, respectively. These attributes can be used to access the range field
     and foreign key field instances in the concrete subclass.
 
@@ -42,6 +38,8 @@ class AbstractSegment(models.Model, metaclass=AbstractSegmentMetaclass):
             my_span = models.ForeignKey(MySpan, on_delete=models.CASCADE)
             segment_span_field_name = 'my_span'
     """
+
+    _set_lower_boundary, _set_upper_boundary = boundary_helper_factory("segment_range_field")
 
     deleted_at = models.DateTimeField(
         _("Deleted at"),
@@ -66,18 +64,12 @@ class AbstractSegment(models.Model, metaclass=AbstractSegmentMetaclass):
         ]
 
     def set_lower_boundary(self, value):
-        """Set the lower boundary of the range field."""
-        boundary_helper = BoundaryHelper(
-            model=self, range_field_name_attr="segment_range_field_name", range_field_attr="segment_range"
-        )
-        boundary_helper.set_lower_boundary(value)
+        """Set the lower boundary of the segment range field."""
+        self._set_lower_boundary(self, value)
 
     def set_upper_boundary(self, value):
-        """Set the upper boundary of the range field."""
-        boundary_helper = BoundaryHelper(
-            model=self, range_field_name_attr="segment_range_field_name", range_field_attr="segment_range"
-        )
-        boundary_helper.set_upper_boundary(value)
+        """Set the upper boundary of the segment range field."""
+        self._set_upper_boundary(self, value)
 
     @property
     def previous(self):

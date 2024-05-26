@@ -7,25 +7,21 @@ from django_segments.app_settings import ALLOW_GAPS
 from django_segments.app_settings import SOFT_DELETE
 from django_segments.app_settings import STICKY_BOUNDARIES
 from django_segments.models.base import AbstractSegmentMetaclass
-from django_segments.models.base import BoundaryHelper
+from django_segments.models.base import boundary_helper_factory
 
 
 logger = logging.getLogger(__name__)
 
 
 class AbstractSpan(models.Model, metaclass=AbstractSegmentMetaclass):
-    """Abstract class from which all span models should inherit.
+    """Abstract class from which all Span models should inherit.
 
     All concrete subclasses of AbstractSpan must define either `initial_range_field_name` (a string representing the
     name of the range field) or `initial_range` (a range field instance). If both or neither are defined, an
     IncorrectSpan will be raised.
 
-    All concrete subclasses of AbstractSpan must define either `current_range_field_name` (a string representing the
-    name of the range field) or `current_range` (a range field instance). If both or neither are defined, an
-    IncorrectSpan will be raised.
-
-    When the concrete subclass is created, the initial_range_field and current_range_field attributes set to the range
-    field instances. These attributes can be used to access the range field instances in the concrete subclass.
+    When the concrete subclass is created, the `initial_range_field` and `current_range_field` attributes set to the
+    range field instances. These attributes can be used to access the range field instances in the concrete subclass.
 
     Example:
 
@@ -37,6 +33,9 @@ class AbstractSpan(models.Model, metaclass=AbstractSegmentMetaclass):
 
             current_range = DateTimeRangeField()
     """
+
+    _set_initial_lower_boundary, _set_initial_upper_boundary = boundary_helper_factory("initial_range_field")
+    _set_lower_boundary, _set_upper_boundary = boundary_helper_factory("current_range_field")
 
     deleted_at = models.DateTimeField(
         _("Deleted at"),
@@ -77,38 +76,20 @@ class AbstractSpan(models.Model, metaclass=AbstractSegmentMetaclass):
         return self.segment_span.field
 
     def set_initial_lower_boundary(self, value):
-        """Set the lower boundary of the initial range field.
-
-        Only used when creating a new span.
-        """
-        boundary_helper = BoundaryHelper(
-            model=self, range_field_name_attr="initial_range_field_name", range_field_attr="initial_range"
-        )
-        boundary_helper.set_lower_boundary(value)
+        """Set the lower boundary of the initial range field."""
+        self._set_initial_lower_boundary(self, value)
 
     def set_initial_upper_boundary(self, value):
-        """Set the upper boundary of the initial range field.
-
-        Only used when creating a new span.
-        """
-        boundary_helper = BoundaryHelper(
-            model=self, range_field_name_attr="initial_range_field_name", range_field_attr="initial_range"
-        )
-        boundary_helper.set_upper_boundary(value)
+        """Set the upper boundary of the initial range field."""
+        self._set_initial_upper_boundary(self, value)
 
     def set_lower_boundary(self, value):
         """Set the lower boundary of the current range field."""
-        boundary_helper = BoundaryHelper(
-            model=self, range_field_name_attr="current_range_field_name", range_field_attr="current_range"
-        )
-        boundary_helper.set_lower_boundary(value)
+        self._set_lower_boundary(self, value)
 
     def set_upper_boundary(self, value):
         """Set the upper boundary of the current range field."""
-        boundary_helper = BoundaryHelper(
-            model=self, range_field_name_attr="current_range_field_name", range_field_attr="current_range"
-        )
-        boundary_helper.set_upper_boundary(value)
+        self._set_upper_boundary(self, value)
 
     def get_segments(self):
         """Return all segments associated with the span."""

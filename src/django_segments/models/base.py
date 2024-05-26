@@ -18,6 +18,57 @@ from django_segments.exceptions import IncorrectSubclassError
 logger = logging.getLogger(__name__)
 
 
+def boundary_helper_factory(range_field_name):
+    """Factory function to create set_lower_boundary and set_upper_boundary model methods for a given range field.
+
+    Args:
+        range_field_name (str): The name of the range field.
+
+    Returns:
+        tuple: A tuple containing the set_lower_boundary and set_upper_boundary methods.
+    """
+
+    def _set_boundary(self, range_field_name, lower=None, upper=None):
+        """Set the boundary of the range field."""
+
+        range_field = getattr(self.model, range_field_name, None)
+        validate_value_type(self, value=lower if lower is not None else upper)
+
+        if lower is not None:
+            range_field.lower = lower
+
+        if upper is not None:
+            range_field.upper = upper
+
+        setattr(self.model, range_field_name, range_field)
+
+    def validate_value_type(self, value):
+        """Validate the type of the provided value against the field_type."""
+        if value is None:
+            return
+
+        if not self.model.field_type in POSTGRES_RANGE_FIELDS.keys():
+            raise ValueError(f"Unsupported field type: {self.model.field_type} not in {POSTGRES_RANGE_FIELDS.keys()=}")
+
+        for key, val in POSTGRES_RANGE_FIELDS.items():
+            if key in self.model.field_type and not isinstance(value, val):
+                raise ValueError(f"Value must be a {val}, not {type(value)}")
+            raise ValueError(f"Unsupported field type: {self.model.field_type}")
+
+    def set_lower_boundary(self, value):
+        """Set the lower boundary of the specified range field."""
+        _set_boundary(self, range_field_name, lower=value)
+
+    def set_upper_boundary(self, value):
+        """Set the upper boundary of the specified range field."""
+        _set_boundary(self, range_field_name, upper=value)
+
+    return (
+        set_lower_boundary,
+        set_upper_boundary,
+    )
+
+
 class ConcreteModelValidationHelper:  # pylint: disable=R0903
     """Helper class for validating that models are concrete."""
 
@@ -161,58 +212,6 @@ class SegmentRangeValidationHelper(RangeValidationHelper):
     def get_validated_segment_range_field(self) -> models.Field:
         """Return the validated segment range field."""
         return self.get_validated_range_field()
-
-
-class BoundaryHelper:
-    """Helper class used by AbstractSpan and AbstractSegment to set the boundaries of the range field."""
-
-    def __init__(
-        self,
-        model: type[models.Model],
-        range_field_name_attr: str,
-        range_field_attr: str,
-    ) -> None:
-        """Initialize the helper with the model and range attributes."""
-        self.model = model
-        self.range_field_name_attr = range_field_name_attr
-        self.range_field_attr = range_field_attr
-
-        self.range_field_name = getattr(self.model, self.range_field_name_attr, None)
-        self.range_field = getattr(self.model, self.range_field_attr, None)
-
-    def set_lower_boundary(self, value):
-        """Set the lower boundary of the range field."""
-        return self._set_boundary(lower=value)
-
-    def set_upper_boundary(self, value):
-        """Set the upper boundary of the range field."""
-        return self._set_boundary(upper=value)
-
-    def _set_boundary(self, lower=None, upper=None):
-        """Set the boundary of the range field."""
-
-        # Ensure that the provided value is of the correct type
-        self.validate_value_type(lower)
-        self.validate_value_type(upper)
-
-        # Set the boundary
-        if lower is not None:
-            self.range_field.lower = lower
-
-        if upper is not None:
-            self.range_field.upper = upper
-
-        return self.range_field
-
-    def validate_value_type(self, value):
-        """Validate the type of the provided value against the field_type."""
-        if not self.model.field_type in POSTGRES_RANGE_FIELDS.keys():
-            raise ValueError(f"Unsupported field type: {self.model.field_type} not in {POSTGRES_RANGE_FIELDS.keys()=}")
-
-        for key, val in POSTGRES_RANGE_FIELDS.items():
-            if key in self.model.field_type and not isinstance(value, val):
-                raise ValueError(f"Value must be a {val}, not {type(value)}")
-            raise ValueError(f"Unsupported field type: {self.model.field_type}")
 
 
 class SegmentSpanValidationHelper:
