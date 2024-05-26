@@ -27,6 +27,9 @@ class AbstractSegment(models.Model, metaclass=AbstractSegmentMetaclass):
     and foreign key field instances in the concrete subclass.
 
     Examples:
+
+    .. code-block:: python
+
         class MySegment(AbstractSegment):
             segment_span = models.ForeignKey(MySpan, on_delete=models.CASCADE)
 

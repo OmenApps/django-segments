@@ -27,7 +27,10 @@ class AbstractSpan(models.Model, metaclass=AbstractSegmentMetaclass):
     When the concrete subclass is created, the initial_range_field and current_range_field attributes set to the range
     field instances. These attributes can be used to access the range field instances in the concrete subclass.
 
-    Examples:
+    Example:
+
+    .. code-block:: python
+
         class MySpan(AbstractSpan):
             my_range_field = DateTimeRangeField()
             initial_range_field_name = 'my_range_field'
