@@ -54,20 +54,21 @@ These options are used to configure the behavior of all Span models, and can be 
         class Config:
             """Custom configuration options for this span."""
 
-            allow_gaps = False
+            allow_span_gaps = False
+            allow_segment_gaps = False
             soft_delete = False
 
-.. data:: ALLOW_GAPS
+.. data:: ALLOW_SPAN_GAPS
 
-        Allow gaps between segments in a span. Default is ``True``.
+        Allow gaps between the boundaries of the Span and its first and last Segments. Default is ``True``. If ``False``, when a new Span is created, a Segment will be created to fill the range of the Span.
 
-.. data:: STICKY_BOUNDARIES
+.. data:: ALLOW_SEGMENT_GAPS
 
-        Force spans & segments to have sticky boundaries (if a range boundary for a span or segment is the same as another segment or the encompassing span, any changes to the boundary are proparated to the objects sharing that boundary). Default is ``True``.
+        Allow gaps between the Segments in a Span. Default is ``True``. If ``False``, all Segments in a Span must be contiguous.
 
 .. data:: SOFT_DELETE
 
-        Use soft delete for segments and spans. Default is ``True``.
+        Use soft delete for segments and spans. Default is ``True``. If ``True``, a ``deleted_at`` field will be added to the Span and Segment models. When a soft delete occurs, the ``deleted_at`` field will be set to the current date and time, and queries will exclude deleted Segments and Spans by default.
 
 exceptions.py
 =============
@@ -108,6 +109,19 @@ models/span.py
 
 .. automodule:: django_segments.models.span
     :members:
+
+signals.py
+==========
+
+.. automodule:: django_segments.signals
+    :members:
+
+When deleting or soft deleting a span, several signals are sent as the Span and its associated Segments are deleted. In each case, the more specific signal is wrapped in the more general signal. This allows you to connect to the more general signal and still receive the more specific signal. The signals are sent in the following order:
+
+.. image:: https://raw.githubusercontent.com/OmenApps/django-segments/main/docs/media/signals-delete.png
+    :alt: Signal Order
+    :align: center
+
 
 views.py
 ========
