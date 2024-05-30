@@ -27,9 +27,9 @@ RUN --mount=type=cache,target=/var/cache/apt,sharing=locked \
     bash curl wget git make software-properties-common \
     build-essential libssl-dev zlib1g-dev libbz2-dev libreadline-dev \
     libsqlite3-dev llvm libncurses5-dev libncursesw5-dev xz-utils tk-dev \
-    libxml2-dev libxmlsec1-dev libffi-dev liblzma-dev  \
-    # psycopg2 dependencies
-    libpq-dev
+    libxml2-dev libxmlsec1-dev libffi-dev liblzma-dev \
+    # psycopg2 dependencies and postgres client
+    libpq-dev postgresql-client
 
 # Install pyenv
 RUN git clone https://github.com/pyenv/pyenv.git .pyenv
