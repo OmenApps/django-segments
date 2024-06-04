@@ -6,15 +6,10 @@ from typing import Union
 from django.db import models
 from django.utils import timezone
 from django.utils.translation import gettext as _
-from psycopg2.extras import Range  # psycopg2's base range class
 
 from django_segments.app_settings import ALLOW_SEGMENT_GAPS
 from django_segments.app_settings import ALLOW_SPAN_GAPS
-from django_segments.app_settings import POSTGRES_RANGE_FIELDS
-from django_segments.app_settings import PREVIOUS_FIELD_ON_DELETE
 from django_segments.app_settings import SOFT_DELETE
-from django_segments.exceptions import IncorrectRangeTypeError
-from django_segments.helpers.span import CreateSpanHelper
 from django_segments.helpers.span import DeleteSpanHelper
 from django_segments.helpers.span import ShiftLowerSpanHelper
 from django_segments.helpers.span import ShiftLowerToValueSpanHelper

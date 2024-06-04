@@ -5,8 +5,6 @@ import logging
 from typing import TYPE_CHECKING
 from typing import Union
 
-from django.db.models.expressions import F
-
 from django_segments.app_settings import POSTGRES_RANGE_FIELDS
 
 

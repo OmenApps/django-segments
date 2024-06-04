@@ -9,9 +9,7 @@ from decimal import Decimal
 from typing import TYPE_CHECKING
 from typing import Union
 
-from django.db import models
 from django.db import transaction
-from django.db.models.expressions import F
 from django.utils import timezone
 from psycopg2.extras import Range  # psycopg2's base range class
 

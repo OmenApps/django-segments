@@ -9,7 +9,6 @@ from typing import TYPE_CHECKING
 
 from django.db import models
 from django.db import transaction
-from django.utils import timezone
 
 from django_segments.helpers.base import BaseHelper
 

@@ -9,10 +9,8 @@ from django_segments.app_settings import DEFAULT_RELATED_QUERY_NAME
 from django_segments.app_settings import PREVIOUS_FIELD_ON_DELETE
 from django_segments.app_settings import SOFT_DELETE
 from django_segments.app_settings import SPAN_ON_DELETE
-from django_segments.exceptions import IncorrectSubclassError
 from django_segments.models.base import AbstractSegmentMetaclass
 from django_segments.models.base import boundary_helper_factory
-from django_segments.models.span import AbstractSpan
 
 
 logger = logging.getLogger(__name__)

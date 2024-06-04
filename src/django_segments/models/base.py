@@ -2,15 +2,7 @@
 
 import logging
 
-from django.contrib.postgres.fields import BigIntegerRangeField
-from django.contrib.postgres.fields import DateRangeField
-from django.contrib.postgres.fields import DateTimeRangeField
-from django.contrib.postgres.fields import DecimalRangeField
-from django.contrib.postgres.fields import IntegerRangeField
-from django.core.exceptions import FieldDoesNotExist
-from django.core.exceptions import ImproperlyConfigured
 from django.db import models
-from django.db.models.signals import class_prepared
 from django.utils.translation import gettext as _
 
 from django_segments.app_settings import ALLOW_SEGMENT_GAPS
@@ -23,8 +15,6 @@ from django_segments.app_settings import PREVIOUS_FIELD_ON_DELETE
 from django_segments.app_settings import SOFT_DELETE
 from django_segments.app_settings import SPAN_ON_DELETE
 from django_segments.exceptions import IncorrectRangeTypeError
-from django_segments.exceptions import IncorrectSegmentRangeError
-from django_segments.exceptions import IncorrectSpanRangeError
 from django_segments.exceptions import IncorrectSubclassError
 
 
