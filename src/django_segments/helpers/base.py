@@ -1,3 +1,4 @@
+"""Base class for all segment and span helpers."""
 from __future__ import annotations
 
 import logging
@@ -5,7 +6,6 @@ from typing import TYPE_CHECKING
 from typing import Union
 
 from django.db.models.expressions import F
-from django.utils import timezone
 
 from django_segments.app_settings import POSTGRES_RANGE_FIELDS
 
@@ -28,11 +28,13 @@ class BaseHelper:  # pylint: disable=R0903
         self.obj = obj
 
         # Get the field_type, which tells us the type of range field used in the model
-        segment_range_field = self.obj.segment_range_field
-        self.field_type = segment_range_field.get_internal_type()
+        segment_range = self.obj.segment_range
+        self.field_type = segment_range.get_internal_type()
 
     def validate_value_type(self, value):
-        """Validate the type of the provided value against the field_type."""
+        """Validate the type of the provided value against the model's field_type."""
+        if value is None:
+            raise ValueError("Value cannot be None")
 
         if not self.field_type in POSTGRES_RANGE_FIELDS.keys():
             raise ValueError(f"Unsupported field type: {self.field_type} not in {POSTGRES_RANGE_FIELDS.keys()=}")

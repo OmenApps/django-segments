@@ -18,5 +18,5 @@ class EventSpanAdmin(admin.ModelAdmin):
 class EventSegmentAdmin(admin.ModelAdmin):
     """Admin for EventSegment model."""
 
-    list_display = ("id", "segment_range", "event_span", "previous_segment", "deleted_at")
+    list_display = ("id", "segment_range", "span", "previous_segment", "deleted_at")
     search_fields = ("id",)

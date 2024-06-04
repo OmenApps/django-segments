@@ -14,3 +14,7 @@ class IncorrectSegmentRangeError(FieldError):
 
 class IncorrectSpanRangeError(FieldError):
     """Raised when a span model's range fields are not correctly implemented."""
+
+
+class IncorrectRangeTypeError(FieldError):
+    """Raised when the range type is not one of the supported types specified in the settings."""

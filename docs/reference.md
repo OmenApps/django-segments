@@ -38,20 +38,16 @@ Package settings.
 
     This is used to convert the range field to a Python type when using the :meth:`django_segments.models.base.AbstractSpanMetaclass.get_range_field` method.
 
-.. data:: ON_DELETE_FOR_PREVIOUS
-
-    The behavior to use when deleting a segment or span that has a previous segment or span. Default is :attr:`django.db.models.CASCADE`.
-
 Global Span Configuration Options
 ---------------------------------
 
-These options are used to configure the behavior of all Span models, and can be overridden on a per-model basis by adding a ``Config`` class with one or more of the corresponding setting names in lowercase to the span model. Example:
+These options are used to configure the behavior of all Span models, and can be overridden on a per-model basis by adding a ``SpanConfig`` class with one or more of the corresponding setting names in lowercase to the span model. Example:
 
 .. code-block:: python
 
     class MySpan(AbstractSpan):
 
-        class Config:
+        class SpanConfig:
             """Custom configuration options for this span."""
 
             allow_span_gaps = False
@@ -69,6 +65,32 @@ These options are used to configure the behavior of all Span models, and can be 
 .. data:: SOFT_DELETE
 
         Use soft delete for segments and spans. Default is ``True``. If ``True``, a ``deleted_at`` field will be added to the Span and Segment models. When a soft delete occurs, the ``deleted_at`` field will be set to the current date and time, and queries will exclude deleted Segments and Spans by default.
+
+Global Segment Configuration Options
+------------------------------------
+
+These options are used to configure the behavior of all Segment models, and can be overridden on a per-model basis by adding a ``SegmentConfig`` class with one or
+more of the corresponding setting names in lowercase to the segment model. Example:
+
+.. code-block:: python
+
+    class MySegment(AbstractSegment):
+
+        class SegmentConfig:
+            """Custom configuration options for this segment."""
+
+            previous_field_on_delete = models.CASCADE
+            span_on_delete = models.CASCADE
+
+.. data:: PREVIOUS_FIELD_ON_DELETE
+
+    The behavior to use when deleting a segment or span that has a previous segment or span. Default is :attr:`django.db.models.CASCADE`.
+
+-- data:: SPAN_ON_DELETE
+
+    The behavior to use when deleting a span. Default is :attr:`django.db.models.CASCADE`.
+
+
 
 exceptions.py
 =============

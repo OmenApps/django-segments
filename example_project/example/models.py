@@ -7,14 +7,21 @@ from django_segments.models import AbstractSegment
 from django_segments.models import AbstractSpan
 
 
+class XYZ:
+    pass
+
+
 class EventSpan(AbstractSpan):
     """A span of time that contains event segments."""
 
-    initial_range = DateTimeRangeField()
-    current_range = DateTimeRangeField()
+    class SpanConfig:
+        """Configuration options for the span."""
 
-    # class Meta:  # pylint: disable=missing-class-docstring
-    #     abstract = False
+        range_type = DateTimeRangeField
+
+        allow_span_gaps = False
+        # allow_segment_gaps = False
+        # soft_delete = False
 
     def __str__(self):
         return f"Initial: {self.initial_range} - Current: {self.current_range}"
@@ -23,13 +30,13 @@ class EventSpan(AbstractSpan):
 class EventSegment(AbstractSegment):
     """A segment of time within an event span."""
 
-    event_span = models.ForeignKey("EventSpan", on_delete=models.CASCADE)
-    segment_span_field_name = "event_span"
+    class SegmentConfig:
+        """Configuration options for the segment."""
 
-    segment_range = DateTimeRangeField()
+        span_model = EventSpan
 
-    # class Meta:  # pylint: disable=missing-class-docstring
-    #     abstract = False
+        previous_field_on_delete = models.CASCADE
+        span_on_delete = models.SET_NULL
 
     def __str__(self):
         return f"Segment Range: {self.segment_range}"

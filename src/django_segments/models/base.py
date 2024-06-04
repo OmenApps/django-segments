@@ -1,15 +1,28 @@
-"""Models for django_segments."""
+"""Base classes and metaclasses for AbstractSpan and AbstractSegment models."""
 
 import logging
 
+from django.contrib.postgres.fields import BigIntegerRangeField
+from django.contrib.postgres.fields import DateRangeField
+from django.contrib.postgres.fields import DateTimeRangeField
+from django.contrib.postgres.fields import DecimalRangeField
+from django.contrib.postgres.fields import IntegerRangeField
 from django.core.exceptions import FieldDoesNotExist
 from django.core.exceptions import ImproperlyConfigured
 from django.db import models
 from django.db.models.signals import class_prepared
 from django.utils.translation import gettext as _
 
+from django_segments.app_settings import ALLOW_SEGMENT_GAPS
+from django_segments.app_settings import ALLOW_SPAN_GAPS
+from django_segments.app_settings import DEFAULT_RELATED_NAME
+from django_segments.app_settings import DEFAULT_RELATED_QUERY_NAME
 from django_segments.app_settings import DJANGO_SEGMENTS_MODEL_BASE as ModelBase
 from django_segments.app_settings import POSTGRES_RANGE_FIELDS
+from django_segments.app_settings import PREVIOUS_FIELD_ON_DELETE
+from django_segments.app_settings import SOFT_DELETE
+from django_segments.app_settings import SPAN_ON_DELETE
+from django_segments.exceptions import IncorrectRangeTypeError
 from django_segments.exceptions import IncorrectSegmentRangeError
 from django_segments.exceptions import IncorrectSpanRangeError
 from django_segments.exceptions import IncorrectSubclassError
@@ -45,7 +58,7 @@ def boundary_helper_factory(range_field_name):
     def validate_value_type(self, value):
         """Validate the type of the provided value against the field_type."""
         if value is None:
-            return
+            raise ValueError("Value cannot be None")
 
         if not self.model.field_type in POSTGRES_RANGE_FIELDS.keys():
             raise ValueError(f"Unsupported field type: {self.model.field_type} not in {POSTGRES_RANGE_FIELDS.keys()=}")
@@ -82,227 +95,94 @@ class ConcreteModelValidationHelper:  # pylint: disable=R0903
             raise IncorrectSubclassError("Concrete subclasses must not be abstract")
 
 
-class RangeTypesMatchHelper:  # pylint: disable=R0903
-    """Helper class for validating that two range fields have the same type."""
-
-    def __init__(self, range_field1: models.Field, range_field2: models.Field) -> None:
-        """Initialize the helper with the range fields."""
-        self.range_field1 = range_field1
-        self.range_field2 = range_field2
-
-        logger.debug("RangeTypesMatchHelper __init__(): %s, %s", type(self.range_field1), type(self.range_field2))
-
-    def validate_range_types_match(self) -> None:
-        """Ensure that the range types match."""
-        range_type1 = self.range_field1.get_internal_type()
-        range_type2 = self.range_field2.get_internal_type()
-
-        if range_type1 != range_type2:
-            raise IncorrectSpanRangeError(
-                f"Range field '{self.range_field1}' and range field '{self.range_field2}' must be the same type"
-            )
-
-
-class RangeValidationHelper:
-    """Base helper class for validating range models."""
-
-    def __init__(
-        self,
-        model: type[models.Model],
-        range_field_name_attr: str,
-        range_field_attr: str,
-        error_class: type[Exception],
-    ) -> None:
-        """Initialize the helper with the model and range attributes."""
-        self.model = model
-        self.range_field_name_attr = range_field_name_attr
-        self.range_field_attr = range_field_attr
-        self.error_class = error_class
-
-        logger.debug(
-            "RangeValidationHelper __init__(): %s, %s, %s, %s",
-            self.model,
-            self.range_field_name_attr,
-            self.range_field_attr,
-            self.error_class,
-        )
-
-        self.range_field_name = getattr(self.model, self.range_field_name_attr, None)
-        range_field_deferred_attr = getattr(self.model, self.range_field_attr, None)
-
-        self.range_field = getattr(range_field_deferred_attr, "field", None) if range_field_deferred_attr else None
-        logger.debug("RangeValidationHelper __init__(): %s, %s", self.range_field_name, self.range_field)
-
-    def get_validated_range_field(self) -> models.Field:
-        """Return the validated range field."""
-        return self.validate_range_field()
-
-    def validate_range_field(self) -> models.Field:
-        """Ensure one and only one of range_field_name or range_field is defined."""
-        logger.debug("RangeValidationHelper validate_range_field(): %s, %s", self.range_field_name, self.range_field)
-
-        # Ensure that one and only one of range_field_name or range_field is defined
-        if self.range_field_name is None and self.range_field is None:
-            raise self.error_class(
-                f"{self.model.__name__}: Concrete subclasses must define either `{self.range_field_name_attr}` or "
-                f"`{self.range_field_attr}`"
-            )
-
-        if self.range_field_name is not None and self.range_field is not None:
-            raise self.error_class(
-                f"{self.model.__name__}: Concrete subclasses must define either `{self.range_field_name_attr}` or "
-                f"`{self.range_field_attr}`, not both"
-            )
-
-        # If a name is provided, make sure that it is a valid field name, and get the field instance
-        if self.range_field_name is not None:
-            range_field = self.get_range_field_name_instance()
-        else:
-            range_field = self.range_field
-
-        # Ensure that the range_field is a valid range field
-        if range_field.get_internal_type() not in POSTGRES_RANGE_FIELDS.keys():
-            raise self.error_class(
-                f"{self.model.__name__}: {self.range_field_name_attr} '{range_field}' must be a PostgreSQL range field"
-            )
-
-        return range_field
-
-    def get_range_field_name_instance(self) -> models.Field:
-        """Return the range field instance."""
-        try:
-            return self.model._meta.get_field(self.range_field_name)  # pylint: disable=W0212
-        except FieldDoesNotExist as e:
-            raise self.error_class(
-                f"{self.range_field_name_attr} '{self.range_field_name}' does not exist on {self.model.__name__}"
-            ) from e
-
-
-class SpanInitialRangeValidationHelper(RangeValidationHelper):
-    """Helper class for validating initial_range in span models."""
-
-    def __init__(self, model: type[models.Model]) -> None:
-        """Initialize the helper with the model."""
-        super().__init__(model, "initial_range_field_name", "initial_range", IncorrectSpanRangeError)
-
-    def get_validated_initial_range_field(self) -> models.Field:
-        """Return the validated initial range field."""
-        return self.get_validated_range_field()
-
-
-class SpanCurrentRangeValidationHelper(RangeValidationHelper):
-    """Helper class for validating current_range in span models."""
-
-    def __init__(self, model: type[models.Model]) -> None:
-        """Initialize the helper with the model."""
-        super().__init__(model, "current_range_field_name", "current_range", IncorrectSpanRangeError)
-
-    def get_validated_current_range_field(self) -> models.Field:
-        """Return the validated current range field."""
-        return self.get_validated_range_field()
-
-
-class SegmentRangeValidationHelper(RangeValidationHelper):
-    """Helper class for validating segment models."""
-
-    def __init__(self, model: type[models.Model]) -> None:
-        """Initialize the helper with the model."""
-        super().__init__(model, "segment_range_field_name", "segment_range", IncorrectSegmentRangeError)
-
-    def get_validated_segment_range_field(self) -> models.Field:
-        """Return the validated segment range field."""
-        return self.get_validated_range_field()
-
-
-class SegmentSpanValidationHelper:
-    """Helper class for validating that models have valid foreign key to a model that inherits from AbstractSpan.
-
-    This can be a field instance named `segment_span` or a field name specified in `segment_span_field_name` attribute.
-    """
-
-    def __init__(self, model: type[models.Model]) -> None:
-        """Initialize the helper with the model."""
-        self.model = model
-        self.segment_span_field_name = getattr(self.model, "segment_span_field_name", None)
-
-        segment_span_deferred_attr = getattr(self.model, "segment_span", None)
-        self.segment_span = getattr(segment_span_deferred_attr, "field", None) if segment_span_deferred_attr else None
-        logger.debug(
-            "SegmentSpanValidationHelper __init__(): %s, %s, %s",
-            self.model,
-            self.segment_span_field_name,
-            self.segment_span,
-        )
-
-    def get_validated_segment_span_field(self) -> models.Field:
-        """Return the validated segment span field."""
-        return self.validate_segment_span_field()
-
-    def validate_segment_span_field(self) -> models.Field:
-        """Ensure one and only one of segment_span_field or segment_span is defined."""
-        if self.segment_span_field_name is None and self.segment_span is None:
-            raise ImproperlyConfigured(
-                "Concrete subclasses must define either `segment_span_field_name` or `segment_span`"
-            )
-
-        if self.segment_span_field_name is not None and self.segment_span is not None:
-            raise ImproperlyConfigured(
-                "Concrete subclasses must define either `segment_span_field_name` or `segment_span`, not both"
-            )
-
-        if self.segment_span_field_name is not None:
-            return self.get_segment_span_field_instance()
-        return self.segment_span
-
-    def get_segment_span_field_instance(self) -> models.Field:
-        """Return the segment span field instance."""
-        try:
-            return self.model._meta.get_field(self.segment_span_field_name)  # pylint: disable=W0212
-        except FieldDoesNotExist as e:
-            raise ImproperlyConfigured(
-                f"segment_span_field_name '{self.segment_span_field_name}' does not exist on {self.model.__name__}"
-            ) from e
-
-
 class AbstractSpanMetaclass(ModelBase):  # pylint: disable=R0903
     """Metaclass for AbstractSpan."""
 
     def __new__(cls, name, bases, attrs, **kwargs):
         """Performs actions that need to take place when a new span model is created.
 
-        Validates subclass of AbstractSpan & sets initial_range_field and current_range_field for the model.
+        Validates subclass of AbstractSpan & sets initial_range and current_range for the model.
         """
         logger.debug("Creating new span model: %s", name)
 
         model = super().__new__(cls, name, bases, attrs, **kwargs)  # pylint: disable=E1121
 
+        def get_config_attr(attr_name: str, default):
+            """Given an attribute name and default value, returns the attribute value from the SpanConfig class."""
+            return getattr(model.SpanConfig, attr_name, None) if hasattr(model.SpanConfig, attr_name) else default
+
+        def get_range_type():
+            """Return the range type for the span model."""
+            range_type = get_config_attr("range_type", None)
+            if range_type is None:
+                raise IncorrectRangeTypeError(f"Range type not defined for {model.__class__.__name__}")
+            if range_type.__name__ not in POSTGRES_RANGE_FIELDS.keys():
+                raise IncorrectRangeTypeError(
+                    f"Unsupported range type: {range_type} not in {POSTGRES_RANGE_FIELDS.keys()=} for "
+                    f"{model.__class__.__name__}"
+                )
+
+            return range_type
+
+        def get_config_dict() -> dict[str, bool]:
+            """Return the configuration options for the span as a dictionary."""
+
+            return {
+                "allow_span_gaps": get_config_attr("allow_span_gaps", ALLOW_SPAN_GAPS),
+                "allow_segment_gaps": get_config_attr("allow_segment_gaps", ALLOW_SEGMENT_GAPS),
+                "soft_delete": get_config_attr("soft_delete", SOFT_DELETE),
+                "range_type": get_range_type(),
+            }
+
         for base in bases:
             if base.__name__ == "AbstractSpan":
+                # Call get_range_type to ensure that the range type is defined
+                get_range_type()
+
                 # Ensure that the model is not abstract
                 concrete_validation_helper = ConcreteModelValidationHelper(model)
                 concrete_validation_helper.check_model_is_concrete()
 
-                # Ensure that the initial_range field is valid
-                span_initial_range_validation_helper = SpanInitialRangeValidationHelper(model)
-                initial_range_field = span_initial_range_validation_helper.get_validated_initial_range_field()
-                model.initial_range_field = initial_range_field
-
-                # Ensure that the current_range field is valid
-                span_current_range_validation_helper = SpanCurrentRangeValidationHelper(model)
-                current_range_field = span_current_range_validation_helper.get_validated_current_range_field()
-                model.current_range_field = current_range_field
-
-                # Ensure that the initial_range field and current_range field have the same type
-                logger.debug(
-                    "AbstractSpanMetaclass passing to RangeTypesMatchHelper: %s, %s",
-                    type(initial_range_field),
-                    type(current_range_field),
+                # Add the initial_range and current_range fields to the model
+                model.add_to_class(
+                    "initial_range",
+                    get_config_dict().get("range_type")(
+                        _("Initial Range"),
+                        blank=True,
+                        null=True,
+                    ),
                 )
-                range_types_match_helper = RangeTypesMatchHelper(initial_range_field, current_range_field)
-                range_types_match_helper.validate_range_types_match()
 
-        # Log the `dir` of the model
-        logger.debug("AbstractSpanMetaclass dir(model): %s", dir(model))
+                model.add_to_class(
+                    "current_range",
+                    get_config_dict().get("range_type")(
+                        _("Current Range"),
+                        blank=True,
+                        null=True,
+                    ),
+                )
+
+                # Add indexes to the model's Meta class
+                if not hasattr(model.Meta, "indexes"):
+                    model.Meta.indexes = [
+                        models.Index(fields=["initial_range"]),
+                        models.Index(fields=["current_range"]),
+                    ]
+
+                # If we are using soft delete, add a deleted_at field to the model
+                if get_config_dict().get("soft_delete"):
+                    model.add_to_class(
+                        "deleted_at",
+                        models.DateTimeField(
+                            _("Deleted At"),
+                            null=True,
+                            blank=True,
+                            help_text=_("The date and time the span was deleted."),
+                        ),
+                    )
+
+                    # Add an index for the deleted_at field
+                    model.Meta.indexes.append(models.Index(fields=["deleted_at"]))
 
         return model
 
@@ -313,58 +193,105 @@ class AbstractSegmentMetaclass(ModelBase):  # pylint: disable=R0903
     def __new__(cls, name, bases, attrs, **kwargs):
         """Performs actions that need to take place when a new segment model is created.
 
-        Validates subclass of AbstractSegment & sets segment_range_field and segment_span_field for the concrete model.
+        Validates subclass of AbstractSegment & sets segment_range and span for the concrete model.
         """
         logger.debug("Creating new segment model: %s", name)
 
         model = super().__new__(cls, name, bases, attrs, **kwargs)  # pylint: disable=E1121
 
-        def late_binding(sender, **kwargs):  # pylint: disable=W0613
-            """Late binding to ensure that the segment_range_field is set after the model is prepared.
+        def get_config_attr(attr_name: str, default):
+            """Given an attribute name and default value, returns the attribute value from the SegmentConfig class."""
+            return getattr(model.SegmentConfig, attr_name, None) if hasattr(model.SegmentConfig, attr_name) else default
 
-            If we try to access the segment_range_field in the related Span model before the models are prepared,
-                we will get an AttributeError.
-            """
-            if sender is model:
-                for base in bases:
-                    if base.__name__ == "AbstractSegment":
-                        # Ensure that the model is not abstract
-                        concrete_validation_helper = ConcreteModelValidationHelper(model)
-                        concrete_validation_helper.check_model_is_concrete()
+        def get_span_model():
+            """Return the span model for the segment model."""
+            span_model = get_config_attr("span_model", None)
+            if span_model is None:
+                raise IncorrectSubclassError(_(f"Span model not defined for {model.__class__.__name__}"))
 
-                        # Ensure that the segment_range field is valid
-                        segment_validation_helper = SegmentRangeValidationHelper(model)
-                        segment_range_field = segment_validation_helper.get_validated_segment_range_field()
-                        model.segment_range_field = segment_range_field  # pylint: disable=W0201
+            # Check if "AbstractSpan" is in the base names for span_model (i.e. if span_model is a subclass of Abstract
+            if "AbstractSpan" not in [base.__name__ for base in span_model.__bases__]:
+                raise IncorrectSubclassError(
+                    _(f"Span model ({span_model}) must be a subclass of AbstractSpan for {model}")
+                )
 
-                        # Ensure that the segment_span field is valid
-                        segment_span_validation_helper = SegmentSpanValidationHelper(model)
-                        segment_span_field = segment_span_validation_helper.get_validated_segment_span_field()
-                        model.segment_span_field = segment_span_field  # pylint: disable=W0201
+            return span_model
 
-                        # Ensure that the segment_range field and span's initial_range field have the same type
-                        related_model = segment_span_field.related_model
-                        segment_span_initial_range_field = getattr(related_model, "initial_range_field", None)
+        def get_config_dict() -> dict[str, bool]:
+            """Return a dictionary of configuration options."""
 
-                        if not segment_span_initial_range_field:
-                            raise ImproperlyConfigured(
-                                f"{related_model.__name__} must have an 'initial_range_field' attribute"
-                            )
+            return {
+                "span_model": get_span_model(),
+                "soft_delete": getattr(get_span_model().SpanConfig, "soft_delete", SOFT_DELETE),
+                "previous_field_on_delete": get_config_attr("previous_field_on_delete", PREVIOUS_FIELD_ON_DELETE),
+                "span_on_delete": get_config_attr("span_on_delete", SPAN_ON_DELETE),
+                "span_related_name": get_config_attr("span_related_name", DEFAULT_RELATED_NAME),
+                "span_related_query_name": get_config_attr("span_related_query_name", DEFAULT_RELATED_QUERY_NAME),
+            }
 
-                        logger.debug(
-                            "AbstractSegmentMetaclass passing to RangeTypesMatchHelper: %s, %s",
-                            type(segment_range_field),
-                            type(segment_span_initial_range_field),
-                        )
-                        range_types_match_helper = RangeTypesMatchHelper(
-                            segment_range_field,
-                            segment_span_initial_range_field,
-                        )
-                        range_types_match_helper.validate_range_types_match()
+        for base in bases:
+            if base.__name__ == "AbstractSegment":
+                # Call get_span_model to ensure that the span model is defined
+                get_span_model()
 
-        class_prepared.connect(late_binding, sender=model)
+                # Ensure that the model is not abstract
+                concrete_validation_helper = ConcreteModelValidationHelper(model)
+                concrete_validation_helper.check_model_is_concrete()
 
-        # Log the `dir` of the model
-        logger.debug("AbstractSegmentMetaclass dir(model): %s", dir(model))
+                # Add the segment_range, span, and previous_segment fields to the model
+                model.add_to_class(
+                    "segment_range",
+                    model.SegmentConfig.span_model.SpanConfig.range_type(
+                        _("Segment Range"),
+                        blank=True,
+                        null=True,
+                    ),
+                )
+
+                model.add_to_class(
+                    "span",
+                    models.ForeignKey(
+                        model.SegmentConfig.span_model,
+                        null=True,
+                        blank=True,
+                        on_delete=get_config_dict().get("span_on_delete"),
+                        related_name=get_config_dict().get("span_related_name"),
+                        related_query_name=get_config_dict().get("span_related_query_name"),
+                    ),
+                )
+
+                model.add_to_class(
+                    "previous_segment",
+                    models.OneToOneField(
+                        model,
+                        null=True,
+                        blank=True,
+                        on_delete=get_config_dict().get("previous_field_on_delete"),
+                        related_name="next_segment",
+                    ),
+                )
+
+                # Add indexes to the model's Meta class
+                if not hasattr(model.Meta, "indexes"):
+                    model.Meta.indexes = [
+                        models.Index(fields=["segment_range"]),
+                    ]
+                else:
+                    model.Meta.indexes.append(models.Index(fields=["segment_range"]))
+
+                # If we are using soft delete, add a deleted_at field to the model
+                if get_config_dict().get("soft_delete"):
+                    model.add_to_class(
+                        "deleted_at",
+                        models.DateTimeField(
+                            _("Deleted At"),
+                            null=True,
+                            blank=True,
+                            help_text=_("The date and time the segment was deleted."),
+                        ),
+                    )
+
+                    # Add an index for the deleted_at field
+                    model.Meta.indexes.append(models.Index(fields=["deleted_at"]))
 
         return model
