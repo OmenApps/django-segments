@@ -75,14 +75,84 @@ def boundary_helper_factory(range_field_name):
 class ConcreteModelValidationHelper:  # pylint: disable=R0903
     """Helper class for validating that models are concrete."""
 
-    def __init__(self, model: type[models.Model]) -> None:
-        """Initialize the helper with the model and error class."""
-        self.model = model
-
-    def check_model_is_concrete(self) -> None:
-        """Ensure that the model is not abstract."""
-        if self.model._meta.abstract:  # pylint: disable=W0212
+    @staticmethod
+    def check_model_is_concrete(model) -> None:
+        """Check that the model is not abstract."""
+        if model._meta.abstract:  # pylint: disable=W0212
             raise IncorrectSubclassError("Concrete subclasses must not be abstract")
+
+
+class SpanConfigurationHelper:
+    """Helper class for retrieving Span model configurations."""
+
+    @staticmethod
+    def get_config_attr(model, attr_name: str, default):
+        """Given an attribute name and default value, returns the attribute value from the SpanConfig class."""
+        return getattr(model.SpanConfig, attr_name, default)
+
+    @staticmethod
+    def get_range_type(model):
+        """Return the range type for the span model."""
+        range_type = SpanConfigurationHelper.get_config_attr(model, "range_type", None)
+        if range_type is None:
+            raise IncorrectRangeTypeError(f"Range type not defined for {model.__class__.__name__}")
+        if range_type.__name__ not in POSTGRES_RANGE_FIELDS:
+            raise IncorrectRangeTypeError(
+                f"Unsupported range type: {range_type} not in {POSTGRES_RANGE_FIELDS.keys()} for "
+                f"{model.__class__.__name__}"
+            )
+        return range_type
+
+    @staticmethod
+    def get_config_dict(model) -> dict:
+        """Return the configuration options for the span as a dictionary."""
+        return {
+            "allow_span_gaps": SpanConfigurationHelper.get_config_attr(model, "allow_span_gaps", ALLOW_SPAN_GAPS),
+            "allow_segment_gaps": SpanConfigurationHelper.get_config_attr(
+                model, "allow_segment_gaps", ALLOW_SEGMENT_GAPS
+            ),
+            "soft_delete": SpanConfigurationHelper.get_config_attr(model, "soft_delete", SOFT_DELETE),
+            "range_type": SpanConfigurationHelper.get_range_type(model),
+        }
+
+
+class SegmentConfigurationHelper:
+    """Helper class for retrieving Segment model configurations."""
+
+    @staticmethod
+    def get_config_attr(model, attr_name: str, default):
+        """Given an attribute name and default value, returns the attribute value from the SegmentConfig class."""
+        return getattr(model.SegmentConfig, attr_name, default)
+
+    @staticmethod
+    def get_span_model(model):
+        """Return the span model for the segment model."""
+        span_model = SegmentConfigurationHelper.get_config_attr(model, "span_model", None)
+        if span_model is None:
+            raise IncorrectSubclassError(_(f"Span model not defined for {model.__class__.__name__}"))
+        if "AbstractSpan" not in [base.__name__ for base in span_model.__bases__]:
+            raise IncorrectSubclassError(_(f"Span model ({span_model}) must be a subclass of AbstractSpan for {model}"))
+        return span_model
+
+    @staticmethod
+    def get_config_dict(model) -> dict:
+        """Return a dictionary of configuration options."""
+        return {
+            "span_model": SegmentConfigurationHelper.get_span_model(model),
+            "soft_delete": getattr(
+                SegmentConfigurationHelper.get_span_model(model).SpanConfig, "soft_delete", SOFT_DELETE
+            ),
+            "previous_field_on_delete": SegmentConfigurationHelper.get_config_attr(
+                model, "previous_field_on_delete", PREVIOUS_FIELD_ON_DELETE
+            ),
+            "span_on_delete": SegmentConfigurationHelper.get_config_attr(model, "span_on_delete", SPAN_ON_DELETE),
+            "span_related_name": SegmentConfigurationHelper.get_config_attr(
+                model, "span_related_name", DEFAULT_RELATED_NAME
+            ),
+            "span_related_query_name": SegmentConfigurationHelper.get_config_attr(
+                model, "span_related_query_name", DEFAULT_RELATED_QUERY_NAME
+            ),
+        }
 
 
 class AbstractSpanMetaclass(ModelBase):  # pylint: disable=R0903
@@ -97,46 +167,20 @@ class AbstractSpanMetaclass(ModelBase):  # pylint: disable=R0903
 
         model = super().__new__(cls, name, bases, attrs, **kwargs)  # pylint: disable=E1121
 
-        def get_config_attr(attr_name: str, default):
-            """Given an attribute name and default value, returns the attribute value from the SpanConfig class."""
-            return getattr(model.SpanConfig, attr_name, None) if hasattr(model.SpanConfig, attr_name) else default
-
-        def get_range_type():
-            """Return the range type for the span model."""
-            range_type = get_config_attr("range_type", None)
-            if range_type is None:
-                raise IncorrectRangeTypeError(f"Range type not defined for {model.__class__.__name__}")
-            if range_type.__name__ not in POSTGRES_RANGE_FIELDS.keys():
-                raise IncorrectRangeTypeError(
-                    f"Unsupported range type: {range_type} not in {POSTGRES_RANGE_FIELDS.keys()=} for "
-                    f"{model.__class__.__name__}"
-                )
-
-            return range_type
-
-        def get_config_dict() -> dict[str, bool]:
-            """Return the configuration options for the span as a dictionary."""
-
-            return {
-                "allow_span_gaps": get_config_attr("allow_span_gaps", ALLOW_SPAN_GAPS),
-                "allow_segment_gaps": get_config_attr("allow_segment_gaps", ALLOW_SEGMENT_GAPS),
-                "soft_delete": get_config_attr("soft_delete", SOFT_DELETE),
-                "range_type": get_range_type(),
-            }
-
         for base in bases:
             if base.__name__ == "AbstractSpan":
                 # Call get_range_type to ensure that the range type is defined
-                get_range_type()
+                SpanConfigurationHelper.get_range_type(model)
 
                 # Ensure that the model is not abstract
-                concrete_validation_helper = ConcreteModelValidationHelper(model)
-                concrete_validation_helper.check_model_is_concrete()
+                ConcreteModelValidationHelper.check_model_is_concrete(model)
+
+                config_dict = SpanConfigurationHelper.get_config_dict(model)
 
                 # Add the initial_range and current_range fields to the model
                 model.add_to_class(
                     "initial_range",
-                    get_config_dict().get("range_type")(
+                    config_dict["range_type"](
                         _("Initial Range"),
                         blank=True,
                         null=True,
@@ -145,7 +189,7 @@ class AbstractSpanMetaclass(ModelBase):  # pylint: disable=R0903
 
                 model.add_to_class(
                     "current_range",
-                    get_config_dict().get("range_type")(
+                    config_dict["range_type"](
                         _("Current Range"),
                         blank=True,
                         null=True,
@@ -160,7 +204,7 @@ class AbstractSpanMetaclass(ModelBase):  # pylint: disable=R0903
                     ]
 
                 # If we are using soft delete, add a deleted_at field to the model
-                if get_config_dict().get("soft_delete"):
+                if config_dict["soft_delete"]:
                     model.add_to_class(
                         "deleted_at",
                         models.DateTimeField(
@@ -189,44 +233,15 @@ class AbstractSegmentMetaclass(ModelBase):  # pylint: disable=R0903
 
         model = super().__new__(cls, name, bases, attrs, **kwargs)  # pylint: disable=E1121
 
-        def get_config_attr(attr_name: str, default):
-            """Given an attribute name and default value, returns the attribute value from the SegmentConfig class."""
-            return getattr(model.SegmentConfig, attr_name, None) if hasattr(model.SegmentConfig, attr_name) else default
-
-        def get_span_model():
-            """Return the span model for the segment model."""
-            span_model = get_config_attr("span_model", None)
-            if span_model is None:
-                raise IncorrectSubclassError(_(f"Span model not defined for {model.__class__.__name__}"))
-
-            # Check if "AbstractSpan" is in the base names for span_model (i.e. if span_model is a subclass of Abstract
-            if "AbstractSpan" not in [base.__name__ for base in span_model.__bases__]:
-                raise IncorrectSubclassError(
-                    _(f"Span model ({span_model}) must be a subclass of AbstractSpan for {model}")
-                )
-
-            return span_model
-
-        def get_config_dict() -> dict[str, bool]:
-            """Return a dictionary of configuration options."""
-
-            return {
-                "span_model": get_span_model(),
-                "soft_delete": getattr(get_span_model().SpanConfig, "soft_delete", SOFT_DELETE),
-                "previous_field_on_delete": get_config_attr("previous_field_on_delete", PREVIOUS_FIELD_ON_DELETE),
-                "span_on_delete": get_config_attr("span_on_delete", SPAN_ON_DELETE),
-                "span_related_name": get_config_attr("span_related_name", DEFAULT_RELATED_NAME),
-                "span_related_query_name": get_config_attr("span_related_query_name", DEFAULT_RELATED_QUERY_NAME),
-            }
-
         for base in bases:
             if base.__name__ == "AbstractSegment":
                 # Call get_span_model to ensure that the span model is defined
-                get_span_model()
+                SegmentConfigurationHelper.get_span_model(model)
 
                 # Ensure that the model is not abstract
-                concrete_validation_helper = ConcreteModelValidationHelper(model)
-                concrete_validation_helper.check_model_is_concrete()
+                ConcreteModelValidationHelper.check_model_is_concrete(model)
+
+                config_dict = SegmentConfigurationHelper.get_config_dict(model)
 
                 # Add the segment_range, span, and previous_segment fields to the model
                 model.add_to_class(
@@ -244,9 +259,9 @@ class AbstractSegmentMetaclass(ModelBase):  # pylint: disable=R0903
                         model.SegmentConfig.span_model,
                         null=True,
                         blank=True,
-                        on_delete=get_config_dict().get("span_on_delete"),
-                        related_name=get_config_dict().get("span_related_name"),
-                        related_query_name=get_config_dict().get("span_related_query_name"),
+                        on_delete=config_dict["span_on_delete"],
+                        related_name=config_dict["span_related_name"],
+                        related_query_name=config_dict["span_related_query_name"],
                     ),
                 )
 
@@ -256,7 +271,7 @@ class AbstractSegmentMetaclass(ModelBase):  # pylint: disable=R0903
                         model,
                         null=True,
                         blank=True,
-                        on_delete=get_config_dict().get("previous_field_on_delete"),
+                        on_delete=config_dict["previous_field_on_delete"],
                         related_name="next_segment",
                     ),
                 )
@@ -270,7 +285,7 @@ class AbstractSegmentMetaclass(ModelBase):  # pylint: disable=R0903
                     model.Meta.indexes.append(models.Index(fields=["segment_range"]))
 
                 # If we are using soft delete, add a deleted_at field to the model
-                if get_config_dict().get("soft_delete"):
+                if config_dict["soft_delete"]:
                     model.add_to_class(
                         "deleted_at",
                         models.DateTimeField(

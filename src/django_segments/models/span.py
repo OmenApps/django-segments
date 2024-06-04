@@ -17,6 +17,7 @@ from django_segments.helpers.span import ShiftSpanHelper
 from django_segments.helpers.span import ShiftUpperSpanHelper
 from django_segments.helpers.span import ShiftUpperToValueSpanHelper
 from django_segments.models.base import AbstractSpanMetaclass
+from django_segments.models.base import SpanConfigurationHelper
 from django_segments.models.base import boundary_helper_factory
 
 
@@ -48,23 +49,10 @@ class AbstractSpan(models.Model, metaclass=AbstractSpanMetaclass):
     class SpanConfig:  # pylint: disable=R0903
         """Configuration options for the span."""
 
-        # range_type = None
-
-    def get_config_attr(self, attr_name: str, default):
-        """Given an attribute name and default value, returns the attribute value from the SpanConfig class."""
-        return getattr(self.SpanConfig, attr_name, None) if hasattr(self.SpanConfig, attr_name) else default
-
     def get_config_dict(self) -> dict[str, bool]:
         """Return the configuration options for the span as a dictionary."""
 
-        range_type = self.get_config_attr("range_type", None)  # Previously verified in the metaclass
-
-        return {
-            "range_type": range_type,
-            "allow_span_gaps": self.get_config_attr("allow_span_gaps", ALLOW_SPAN_GAPS),
-            "allow_segment_gaps": self.get_config_attr("allow_segment_gaps", ALLOW_SEGMENT_GAPS),
-            "soft_delete": self.get_config_attr("soft_delete", SOFT_DELETE),
-        }
+        return SpanConfigurationHelper.get_config_dict(self)
 
     def get_segment_class(self):
         """Get the segment class from the instance, useful when creating new segments dynamically.
@@ -72,7 +60,8 @@ class AbstractSpan(models.Model, metaclass=AbstractSpanMetaclass):
         This method accesses the reverse relation from the segment model to the span model.
         """
         # return self.span.field.related_model
-        return self.span.field  # ToDo: Check if this is correct
+        # return self.span.field
+        return self._meta.get_field("span").related_model
 
     def set_initial_lower_boundary(self, value) -> None:
         """Set the lower boundary of the initial range field."""

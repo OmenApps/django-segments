@@ -14,6 +14,7 @@ from django.utils import timezone
 from psycopg2.extras import Range  # psycopg2's base range class
 
 from django_segments.helpers.base import BaseHelper
+from django_segments.models.base import SpanConfigurationHelper
 from django_segments.signals import segment_post_create
 from django_segments.signals import segment_post_delete
 from django_segments.signals import segment_post_delete_or_soft_delete
@@ -47,7 +48,7 @@ class SpanHelperBase(BaseHelper):  # pylint: disable=R0903
 
     def __init__(self, obj: BaseSpan):
         super().__init__(obj)
-        self.config_dict = self.obj.get_config_dict()
+        self.config_dict = SpanConfigurationHelper.get_config_dict(obj)
 
 
 class CreateSpanHelper:
@@ -58,7 +59,7 @@ class CreateSpanHelper:
 
     def __init__(self, model_class: type[BaseSpan]):
         self.model_class = model_class
-        self.config_dict = self.model_class.get_config_dict()
+        self.config_dict = SpanConfigurationHelper.get_config_dict(model_class)
 
     @transaction.atomic
     def create(self, *args, range_value: Range = None, **kwargs):

@@ -26,8 +26,9 @@ class BaseHelper:  # pylint: disable=R0903
         self.obj = obj
 
         # Get the field_type, which tells us the type of range field used in the model
-        segment_range = self.obj.segment_range
-        self.field_type = segment_range.get_internal_type()
+        segment_range = getattr(self.obj, 'segment_range', None)
+        if segment_range:
+            self.field_type = segment_range.get_internal_type()
 
     def validate_value_type(self, value):
         """Validate the type of the provided value against the model's field_type."""

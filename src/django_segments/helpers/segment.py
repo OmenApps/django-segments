@@ -11,6 +11,7 @@ from django.db import models
 from django.db import transaction
 
 from django_segments.helpers.base import BaseHelper
+from django_segments.models.base import SegmentConfigurationHelper
 
 
 logger = logging.getLogger(__name__)
@@ -25,7 +26,7 @@ class SegmentHelperBase(BaseHelper):
 
     def __init__(self, obj: BaseSegment):
         super().__init__(obj)
-        self.config_dict = self.obj.span.get_config_dict()
+        self.config_dict = SegmentConfigurationHelper(obj).get_config_dict()
 
     def validate_segment_range(self, segment_range):
         """Validate the segment range based on the span and any adjacent segments."""
@@ -79,7 +80,7 @@ class CreateSegmentHelper(SegmentHelperBase):
 
         # Adjust adjacent segments if not allowing segment gaps
         if not self.config_dict["allow_segment_gaps"]:
-            self.adjust_adjacent_segments(segment_instance)
+            self.adjust_adjacent_segments()
 
         return segment_instance
 
