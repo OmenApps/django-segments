@@ -22,9 +22,8 @@ class Command(BaseCommand):
 
     def handle(self, *args: Any, **options: Any) -> None:
         """Handle the command."""
-        self.stdout.write(
-            self.style.SUCCESS("Printing model fields for each model descending from AbstractSegment or AbstractSpan.")
-        )
+        self.formatted("\nPrinting model fields for each model descending from AbstractSegment or AbstractSpan", "pink")
+        self.formatted("====================================================================================", "pink")
 
         models_to_print = self.get_models_to_print()
         for model in models_to_print:
@@ -36,7 +35,7 @@ class Command(BaseCommand):
 
     def formatted(self, text: str, color: str, end: str = "\n") -> None:
         """Print the given text in the given color."""
-        colors = {"red": "\x1b[31m", "green": "\x1b[32m", "yellow": "\x1b[33m", "blue": "\x1b[34m"}
+        colors = {"green": "\x1b[32m", "yellow": "\x1b[33m", "blue": "\x1b[34m", "pink": "\x1b[35m"}
         reset = "\x1b[0m"
         self.stdout.write(colors.get(color, "") + text + reset + end)
 
