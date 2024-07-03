@@ -20,7 +20,7 @@ html_theme = "furo"
 
 # Add package path to sys.path
 sys.path.insert(0, os.path.join(os.path.abspath("."), "../"))
-os.environ["DJANGO_SETTINGS_MODULE"] = "tests.settings"
+os.environ["DJANGO_SETTINGS_MODULE"] = "tests.config.settings"
 
 # Initialize Django
 django.setup()

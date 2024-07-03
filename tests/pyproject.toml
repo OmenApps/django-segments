@@ -1,0 +1,5 @@
+[tool.pytest.ini_options]
+DJANGO_SETTINGS_MODULE = "tests.config.settings"
+python_files = ["test_*.py", "*_test.py", "tests/*.py"]
+log_cli = true
+log_cli_level = "DEBUG"

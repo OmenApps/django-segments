@@ -1,26 +1,26 @@
 """Prints the model fields in each model descending from AbstractSegment or AbstractSpan in the Django project."""
 
 import logging
-from typing import Any
-from typing import Dict
+from typing import Any, Dict
 
 from django.apps import apps
 from django.core.management.base import BaseCommand
 from django.db import models
 
-from django_segments.models import AbstractSegment
-from django_segments.models import AbstractSpan
+from django_segments.models import AbstractSegment, AbstractSpan
 
 
 logger = logging.getLogger(__name__)
 
 
 class Command(BaseCommand):
-    """Prints out details of the model fields in each model descending from AbstractSegment or AbstractSpan in the Django project."""
+    """Prints details of model fields in each model descending from AbstractSegment or AbstractSpan in the project."""
 
-    help = "Prints out details of the model fields in each model descending from AbstractSegment or AbstractSpan in the Django project."
+    help = (
+        "Prints details of model fields in each model descending from AbstractSegment or AbstractSpan in the project."
+    )
 
-    def handle(self, *args: Any, **options: Any) -> None:
+    def handle(self, *args: Any, **options: Any) -> None:  # pylint: disable=W0613
         """Handle the command."""
         self.formatted("\nPrinting model fields for each model descending from AbstractSegment or AbstractSpan", "pink")
         self.formatted("====================================================================================", "pink")
@@ -43,28 +43,34 @@ class Command(BaseCommand):
         """Print the model fields for the given model."""
         self.formatted(f"\nModel: {model.__name__}", "yellow")
 
-        for field in model._meta.get_fields():
+        for field in model._meta.get_fields():  # pylint: disable=W0212
             self.print_field_details(field)
 
     def print_field_details(self, field: models.Field) -> None:
         """Print the details of the given field."""
         field_details = self.get_field_details(field)
 
-        if not (field_details["is_relation"] and field_details["related_name"] is None):
-            self.formatted(f"\tField:  {field.name}", "blue")
+        # if not (field_details["is_relation"] and field_details["related_name"] is None):
+        #     self.formatted(f"\tField:  {field.name}", "blue")
 
-            for key, value in field_details.items():
-                if value is not None and key != "is_relation":
-                    self.formatted(f"\t\t{key}: {value}", "green")
+        #     for key, value in field_details.items():
+        #         if value is not None and key != "is_relation":
+        #             self.formatted(f"\t\t{key}: {value}", "green")
+
+        self.formatted(f"\tField:  {field.name}", "blue")
+
+        for key, value in field_details.items():
+            if value is not None and key != "is_relation":
+                self.formatted(f"\t\t{key}: {value}", "green")
 
     def get_field_details(self, field: models.Field) -> Dict[str, Any]:
         """Get the details of the given field."""
-        field_type = (
+        range_field_type = (
             field.get_internal_type() if not getattr(field, "one_to_many", False) else "Reverse of a ForeignKey"
         )
 
         return {
-            "type": field_type,
+            "range_field_type": range_field_type,
             "null": getattr(field, "null", None),
             "blank": getattr(field, "blank", None),
             "default": self.get_field_default(field),

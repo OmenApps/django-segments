@@ -1,7 +1,6 @@
 """Exceptions for the django_segments package."""
 
-from django.core.exceptions import FieldError
-from django.core.exceptions import ImproperlyConfigured
+from django.core.exceptions import FieldError, ImproperlyConfigured
 
 
 class IncorrectSubclassError(ImproperlyConfigured):
@@ -18,3 +17,11 @@ class IncorrectSpanRangeError(FieldError):
 
 class IncorrectRangeTypeError(FieldError):
     """Raised when the range type is not one of the supported types specified in the settings."""
+
+
+class InvalidRangeFieldNameError(FieldError):
+    """Raised when the field specified by range_field_name does not exist on the model."""
+
+
+class SegmentRelationshipError(FieldError):
+    """Raised when the segment instances for a span are not related correctly by previous_segment."""

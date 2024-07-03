@@ -12,8 +12,8 @@ Attributes:
         dictionary containing the following key-value pairs:
         - `IntegerRangeField.__name__`: `int`
         - `BigIntegerRangeField.__name__`: `int`
-        - `DecimalRangeField.__name__`: `float`
-        - `DateRangeField.__name__`: `datetime.date`
+        - `DecimalRangeField.__name__`: `Decimal`
+        - `DateRangeField.__name__`: `date`
         - `DateTimeRangeField.__name__`: `datetime`
     PREVIOUS_FIELD_ON_DELETE (int): The approach for deletion in the segment's `previous` field. This setting should be
         one of the following:
@@ -33,16 +33,24 @@ Attributes:
 """
 
 import logging
+from datetime import date, datetime
+from decimal import Decimal
 
 from django.conf import settings
-from django.contrib.postgres.fields import BigIntegerRangeField
-from django.contrib.postgres.fields import DateRangeField
-from django.contrib.postgres.fields import DateTimeRangeField
-from django.contrib.postgres.fields import DecimalRangeField
-from django.contrib.postgres.fields import IntegerRangeField
+from django.contrib.postgres.fields import (
+    BigIntegerRangeField,
+    DateRangeField,
+    DateTimeRangeField,
+    DecimalRangeField,
+    IntegerRangeField,
+)
 from django.db import models
+from django.db.backends.postgresql.psycopg_any import (
+    DateRange,
+    DateTimeTZRange,
+    NumericRange,
+)
 from django.db.models.base import ModelBase
-from django.utils.timezone import datetime
 
 
 logger = logging.getLogger(__name__)
@@ -57,11 +65,26 @@ POSTGRES_RANGE_FIELDS = getattr(
     settings,
     "POSTGRES_RANGE_FIELDS",
     {
-        IntegerRangeField.__name__: int,
-        BigIntegerRangeField.__name__: int,
-        DecimalRangeField.__name__: float,
-        DateRangeField.__name__: datetime.date,
-        DateTimeRangeField.__name__: datetime,
+        IntegerRangeField.__name__: {
+            "type": int,
+            "range": NumericRange,
+        },
+        BigIntegerRangeField.__name__: {
+            "type": int,
+            "range": NumericRange,
+        },
+        DecimalRangeField.__name__: {
+            "type": Decimal,
+            "range": NumericRange,
+        },
+        DateRangeField.__name__: {
+            "type": date,
+            "range": DateRange,
+        },
+        DateTimeRangeField.__name__: {
+            "type": datetime,
+            "range": DateTimeTZRange,
+        },
     },
 )
 

@@ -31,12 +31,12 @@ Package settings.
         {
             IntegerRangeField.__name__: int,
             BigIntegerRangeField.__name__: int,
-            DecimalRangeField.__name__: float,
-            DateRangeField.__name__: datetime.date,
+            DecimalRangeField.__name__: Decimal,
+            DateRangeField.__name__: date,
             DateTimeRangeField.__name__: datetime,
         }
 
-    This is used to convert the range field to a Python type when using the :meth:`django_segments.models.base.AbstractSpanMetaclass.get_range_field` method.
+    This is used to convert the range field to a Python type when using the :meth:`django_segments.models.base.BaseSpanMetaclass.get_range_field` method.
 
 Global Span Configuration Options
 ---------------------------------
@@ -110,12 +110,12 @@ models/base.py
 .. automodule:: django_segments.models.base
     :members:
 
-.. autoclass:: django_segments.models.base.AbstractSpanMetaclass
+.. autoclass:: django_segments.models.base.BaseSpanMetaclass
    :members:
    :no-index:
    :special-members: __new__
 
-.. autoclass:: django_segments.models.base.AbstractSegmentMetaclass
+.. autoclass:: django_segments.models.base.BaseSegmentMetaclass
    :members:
    :no-index:
    :special-members: __new__

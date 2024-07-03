@@ -38,14 +38,16 @@ import django.dispatch
 
 # Create
 span_pre_create = django.dispatch.Signal()
-segment_pre_create = django.dispatch.Signal()
 span_post_create = django.dispatch.Signal()
+
+segment_pre_create = django.dispatch.Signal()
 segment_post_create = django.dispatch.Signal()
 
 # Pre Delete
 segment_pre_delete = django.dispatch.Signal()
 segment_pre_soft_delete = django.dispatch.Signal()
 segment_pre_delete_or_soft_delete = django.dispatch.Signal()
+
 span_pre_delete = django.dispatch.Signal()
 span_pre_soft_delete = django.dispatch.Signal()
 span_pre_delete_or_soft_delete = django.dispatch.Signal()
@@ -63,3 +65,11 @@ segment_pre_update = django.dispatch.Signal()
 segment_post_update = django.dispatch.Signal()
 span_pre_update = django.dispatch.Signal()
 span_post_update = django.dispatch.Signal()
+
+# Failures
+span_create_failed = django.dispatch.Signal()
+segment_create_failed = django.dispatch.Signal()
+segment_delete_failed = django.dispatch.Signal()
+span_delete_failed = django.dispatch.Signal()
+segment_update_failed = django.dispatch.Signal()
+span_update_failed = django.dispatch.Signal()

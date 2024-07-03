@@ -10,11 +10,19 @@ ARG PYTHON_3_10=3.10.14
 ARG PYTHON_3_11=3.11.9
 ARG PYTHON_3_12=3.12.3
 
-ENV PYTHONUNBUFFERED 1
-ENV PYTHONDONTWRITEBYTECODE 1
-ENV COMPOSE_DOCKER_CLI_BUILD 1
-ENV DOCKER_BUILDKIT 1
-ENV BUILD_ENV ${BUILD_ENVIRONMENT}
+ENV PYTHONUNBUFFERED=1
+ENV PYTHONDONTWRITEBYTECODE=1
+ENV COMPOSE_DOCKER_CLI_BUILD=1
+ENV DOCKER_BUILDKIT=1
+ENV BUILD_ENV=${BUILD_ENVIRONMENT}
+
+
+# Create user and group
+RUN addgroup --system django \
+    && adduser --system --ingroup django django
+
+# Make the /app directory and set permissions
+RUN mkdir /app && chown django:django /app
 
 WORKDIR ${APP_HOME}
 
@@ -33,8 +41,8 @@ RUN --mount=type=cache,target=/var/cache/apt,sharing=locked \
 
 # Install pyenv
 RUN git clone https://github.com/pyenv/pyenv.git .pyenv
-ENV PYENV_ROOT ${APP_HOME}/.pyenv
-ENV PATH $PYENV_ROOT/shims:$PYENV_ROOT/bin:$PATH
+ENV PYENV_ROOT=${APP_HOME}/.pyenv
+ENV PATH=$PYENV_ROOT/shims:$PYENV_ROOT/bin:$PATH
 
 # Install Python version(s)
 RUN if [ "$MULTIPLE_PYTHON" = "True" ] ; then \
@@ -72,36 +80,41 @@ RUN --mount=type=cache,target=/var/cache/apt,sharing=locked \
 RUN pip install poetry
 
 # Copy poetry files
-COPY poetry.lock pyproject.toml ${APP_HOME}
+COPY --chown=django:django poetry.lock pyproject.toml ${APP_HOME}
+COPY --chown=django:django ./src/django_segments/ ${APP_HOME}/django_segments/
 
 # Install dependencies:
-RUN poetry config virtualenvs.create false \
+RUN --mount=type=cache,target=/home/django/.cache/pypoetry,sharing=locked \
+    poetry config virtualenvs.create false \
     && poetry install --with dev --no-interaction --no-ansi --no-root
 
 # Copy remaining project files
-COPY noxfile.py manage.py ${APP_HOME}
-COPY .darglint .editorconfig .flake8 .gitignore .pre-commit-config.yaml .prettierignore .readthedocs.yml bandit.yml ${APP_HOME}
-COPY CHANGELOG.md CODE_OF_CONDUCT.md CONTRIBUTING.md LICENSE README.md ${APP_HOME}
-COPY ./docs/ ${APP_HOME}/docs
-COPY ./example_project/ ${APP_HOME}/example_project/
-COPY ./tests/ ${APP_HOME}/tests/
-COPY ./src/ ${APP_HOME}/
-COPY ./src/ ${APP_HOME}/src/
+COPY --chown=django:django noxfile.py manage.py ${APP_HOME}
+COPY --chown=django:django .darglint .editorconfig .flake8 .gitignore .pre-commit-config.yaml .prettierignore .readthedocs.yml bandit.yml ${APP_HOME}
+COPY --chown=django:django CHANGELOG.md CODE_OF_CONDUCT.md CONTRIBUTING.md LICENSE README.md ${APP_HOME}
+COPY --chown=django:django ./docs/ ${APP_HOME}/docs/
+COPY --chown=django:django ./tests/ ${APP_HOME}/tests/
 
 # Rehash pyenv shims
 RUN pyenv rehash
 
 # Project initialization:
-COPY ./compose/django/entrypoint /entrypoint
+COPY --chown=django:django ./compose/django/entrypoint /entrypoint
 RUN sed -i 's/\r$//g' /entrypoint
 RUN chmod +x /entrypoint
 
-COPY ./compose/django/start /start
+COPY --chown=django:django ./compose/django/start /start
 RUN sed -i 's/\r$//g' /start
 RUN chmod +x /start
+
+USER django
+
+RUN touch __init__.py
 
 # Initialize git and add .
 RUN git init
 RUN git add .
+
+ENV DJANGO_SETTINGS_MODULE=tests.config.settings
 
 ENTRYPOINT ["/entrypoint"]

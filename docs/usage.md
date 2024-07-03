@@ -1,3 +1,3 @@
 # Usage
 
-Until this section is complete, please see the [tests](https://github.com/OmenApps/django-segments/tree/main/tests) and the [example project](https://github.com/OmenApps/django-segments/tree/main/example_project) for usage examples.
+Until this section is complete, please see the [example app in tests](https://github.com/OmenApps/django-segments/tree/main/tests/example) for usage examples.
