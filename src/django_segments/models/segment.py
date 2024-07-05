@@ -1,11 +1,20 @@
 """This module contains the AbstractSegment class, which is the base class for all Segment models."""
 import logging
+from datetime import date, datetime
+from decimal import Decimal
+from typing import Optional, Union
 
 from django.db import models
+from django.db.backends.postgresql.psycopg_any import (
+    DateRange,
+    DateTimeTZRange,
+    NumericRange,
+    Range,
+)
 from django.utils import timezone
 
+from django_segments.context_managers import SegmentDeleteSignalContext
 from django_segments.helpers.segment import (
-    AppendSegmentHelper,
     CreateSegmentHelper,
     DeleteSegmentHelper,
     InsertSegmentHelper,
@@ -14,6 +23,10 @@ from django_segments.helpers.segment import (
     ShiftSegmentHelper,
     ShiftUpperSegmentHelper,
     SplitSegmentHelper,
+)
+from django_segments.helpers.span import (
+    AppendSegmentToSpanHelper,
+    SpanConfigurationHelper,
 )
 from django_segments.models.base import (
     BaseSegmentMetaclass,
@@ -85,7 +98,7 @@ class AbstractSegment(models.Model, metaclass=BaseSegmentMetaclass):  # pylint: 
             span_model = MyOtherSpan
     """
 
-    _set_lower_boundary, _set_upper_boundary = boundary_helper_factory("segment_range")
+    _set_boundaries, _set_lower_boundary, _set_upper_boundary = boundary_helper_factory("segment_range")
 
     objects = SegmentManager.from_queryset(SegmentQuerySet)()
 
@@ -106,10 +119,21 @@ class AbstractSegment(models.Model, metaclass=BaseSegmentMetaclass):  # pylint: 
         """Return the configuration options for the segment's parent span."""
         return self.span.get_config_dict()
 
+    @property
+    def range_field_type(self):
+        """Return the range field type."""
+        return SpanConfigurationHelper.get_range_field_type(self.span)
+
     @staticmethod
-    def create(*args, span, segment_range, **kwargs):
+    def create(*, span, segment_range, **kwargs):
         """Create a new Segment instance."""
-        return CreateSegmentHelper(*args, span=span, segment_range=segment_range, **kwargs).create()
+        return CreateSegmentHelper(span=span, segment_range=segment_range, **kwargs).create()
+
+    def set_boundaries(
+        self, lower_boundary: Union[int, Decimal, datetime, date], upper_boundary: Union[int, Decimal, datetime, date]
+    ) -> None:
+        """Set both boundaries of the segment range field."""
+        self._set_boundaries(lower_boundary, upper_boundary)
 
     def set_lower_boundary(self, value) -> None:
         """Set the lower boundary of the segment range field."""
@@ -119,29 +143,29 @@ class AbstractSegment(models.Model, metaclass=BaseSegmentMetaclass):  # pylint: 
         """Set the upper boundary of the segment range field."""
         self._set_upper_boundary(value)
 
-    def shift_by_value(self, value):
+    def shift_by_value(self, delta_value):
         """Shift the range value of the entire Segment."""
-        ShiftSegmentHelper(self).shift_by_value(value)
+        ShiftSegmentHelper(self).shift_by_value(delta_value=delta_value)
 
-    def shift_lower_by_value(self, value):
+    def shift_lower_by_value(self, delta_value):
         """Shift the lower boundary of the Segment's segment_range by the given value."""
-        ShiftLowerSegmentHelper(self).shift_lower_by_value(value)
+        ShiftLowerSegmentHelper(self).shift_lower_by_value(delta_value=delta_value)
 
-    def shift_upper_by_value(self, value):
+    def shift_upper_by_value(self, delta_value):
         """Shift the upper boundary of the Segment's segment_range by the given value."""
-        ShiftUpperSegmentHelper(self).shift_upper_by_value(value)
+        ShiftUpperSegmentHelper(self).shift_upper_by_value(delta_value=delta_value)
 
-    def shift_lower_to_value(self, new_value):
+    def shift_lower_to_value(self, to_value: Union[int, Decimal, datetime, date]) -> None:
         """Shift the lower boundary of the Segment's segment_range to the given value."""
-        ShiftLowerSegmentHelper(self).shift_lower_to_value(new_value)
+        ShiftLowerSegmentHelper(self).shift_lower_to_value(to_value=to_value)
 
-    def shift_upper_to_value(self, new_value):
+    def shift_upper_to_value(self, to_value: Union[int, Decimal, datetime, date]) -> None:
         """Shift the upper boundary of the Segment's segment_range to the given value."""
-        ShiftUpperSegmentHelper(self).shift_upper_to_value(new_value)
+        ShiftUpperSegmentHelper(self).shift_upper_to_value(to_value=to_value)
 
     def split(self, split_value, fields_to_copy=None):
         """Split the segment into two at the provided value."""
-        SplitSegmentHelper(self).split(split_value, fields_to_copy)
+        SplitSegmentHelper(self).split(split_value=split_value, fields_to_copy=fields_to_copy)
 
     def merge_into_upper(self):
         """Merge the segment into the next (upper) segment."""
@@ -151,26 +175,28 @@ class AbstractSegment(models.Model, metaclass=BaseSegmentMetaclass):  # pylint: 
         """Merge the segment into the previous (lower) segment."""
         MergeSegmentHelper(self).merge_into_lower()
 
-    def append(self, value):
-        """Append a segment with the specified range."""
-        AppendSegmentHelper(self).append(value)
+    def append(
+        self,
+        to_value: Optional[Union[int, Decimal, date, datetime, Range]] = None,
+        delta_value: Optional[Union[int, Decimal, timezone.timedelta]] = None,
+        **kwargs,
+    ) -> None:
+        """Append a Segment to using the given value or delta value."""
+        return AppendSegmentToSpanHelper(self.span).append(to_value=to_value, delta_value=delta_value, **kwargs)
 
-    def insert(self, span, segment_range):
+    def insert(self, *, span: models.Model, segment_range: Union[Range, DateRange, DateTimeTZRange, NumericRange]):
         """Insert a new segment into the span."""
         InsertSegmentHelper(self).insert(span, segment_range)
 
     def delete(self):
         """Delete the Segment."""
         if self.get_config_dict().get("soft_delete"):
-            print("soft deleting segment")
+            # print("soft deleting segment")
             DeleteSegmentHelper(self).soft_delete()
         else:
-            print("hard deleting segment")
-            segment_pre_delete_or_soft_delete.send(sender=self.__class__)  # Send signal
-            segment_pre_delete.send(sender=self.__class__)  # Send signal
-            super().delete()
-            segment_post_delete.send(sender=self.__class__)  # Send signal
-            segment_post_delete_or_soft_delete.send(sender=self.__class__)  # Send signal
+            # print("hard deleting segment")
+            with SegmentDeleteSignalContext(self):
+                super().delete()
 
     @property
     def previous(self):

@@ -1,10 +1,13 @@
-import logging
+"""Context managers for sending signals before and after creating, updating, and deleting spans and segments."""
 
-from django_segments.models.base import (
-    BaseSegmentMetaclass,
-    SegmentConfigurationHelper,
-    boundary_helper_factory,
-)
+from __future__ import annotations
+
+import logging
+import typing
+
+from django.db.backends.postgresql.psycopg_any import Range
+
+from django_segments.models.base import BaseSegmentMetaclass, SegmentConfigurationHelper
 
 from .signals import (
     segment_create_failed,
@@ -38,6 +41,9 @@ from .signals import (
 
 logger = logging.getLogger(__name__)
 
+if typing.TYPE_CHECKING:
+    from django_segments.models import AbstractSpan
+
 
 class SpanCreateSignalContext:
     """Context manager for sending signals before and after creating a span.
@@ -51,10 +57,9 @@ class SpanCreateSignalContext:
             context.kwargs["span"] = span
     """
 
-    def __init__(self, span_model, span_range, *args, **kwargs):
+    def __init__(self, *, span_model, span_range, **kwargs):
         self.span_model = span_model
         self.span_range = span_range
-        self.args = args
         self.kwargs = kwargs
 
     def __enter__(self):
@@ -174,15 +179,14 @@ class SegmentCreateSignalContext:
 
     .. code-block:: python
 
-        with SegmentCreateSignalContext(span, segment_range) as context:
+        with SegmentCreateSignalContext(span=span, segment_range=segment_range) as context:
             segment = Segment.objects.create(span=span, segment_range=segment_range)
             context.kwargs["segment"] = segment
     """
 
-    def __init__(self, span, segment_range, *args, **kwargs):
+    def __init__(self, *, span: AbstractSpan, segment_range: Range, **kwargs):
         self.span = span
         self.segment_range = segment_range
-        self.args = args
         self.kwargs = kwargs
 
     def __enter__(self):

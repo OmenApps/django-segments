@@ -54,7 +54,11 @@ class TestShiftSpan:
     def test_shift_by_value(self, integer_span_and_segments):
         """Verifies that the span and segments can be shifted correctly."""
         integer_span, [segment1, segment2, segment3] = integer_span_and_segments
-        integer_span.shift_by_value(2)
+        integer_span.shift_by_value(delta_value=2)
+
+        segment1.refresh_from_db()
+        segment2.refresh_from_db()
+        segment3.refresh_from_db()
 
         assert integer_span.current_range.lower == 2
         assert integer_span.current_range.upper == (RANGE_DELTA_VALUE * 3) + 2
@@ -65,63 +69,64 @@ class TestShiftSpan:
         assert segment3.segment_range.lower == (RANGE_DELTA_VALUE * 2) + 2
         assert segment3.segment_range.upper == (RANGE_DELTA_VALUE * 3) + 2
 
-    # def test_shift_lower_by_value(self, integer_span):
-    #     """Verifies that the span lower boundary can be shifted correctly."""
-    #     integer_span.shift_lower_by_value(-1)
-    #     assert integer_span.current_range.lower == -1
-    #     assert integer_span.current_range.upper == 10
+    def test_shift_lower_by_value(self, integer_span):
+        """Verifies that the span lower boundary can be shifted correctly."""
+        integer_span.shift_lower_by_value(delta_value=-1)
+        assert integer_span.current_range.lower == -1
+        assert integer_span.current_range.upper == RANGE_DELTA_VALUE
 
-    # def test_shift_upper_by_value(self, integer_span):
-    #     """Verifies that the span upper boundary can be shifted correctly."""
-    #     integer_span.shift_upper_by_value(2)
-    #     assert integer_span.current_range.lower == 0
-    #     assert integer_span.current_range.upper == 12
+    def test_shift_upper_by_value(self, integer_span):
+        """Verifies that the span upper boundary can be shifted correctly."""
+        integer_span.shift_upper_by_value(delta_value=2)
+        assert integer_span.current_range.lower == 0
+        assert integer_span.current_range.upper == RANGE_DELTA_VALUE + 2
 
-    # def test_shift_lower_to_value(self, integer_span):
-    #     """Verifies that the span lower boundary can be shifted to a specific value."""
-    #     integer_span.shift_lower_to_value(1)
-    #     assert integer_span.current_range.lower == 1
-    #     assert integer_span.current_range.upper == 10
+    def test_shift_lower_to_value(self, integer_span):
+        """Verifies that the span lower boundary can be shifted to a specific value."""
+        integer_span.shift_lower_to_value(to_value=1)
+        # integer_span.refresh_from_db()
+        assert integer_span.current_range.lower == 1
+        assert integer_span.current_range.upper == RANGE_DELTA_VALUE
 
-    # def test_shift_upper_to_value(self, integer_span):
-    #     """Verifies that the span upper boundary can be shifted to a specific value."""
-    #     integer_span.shift_upper_to_value(9)
-    #     assert integer_span.current_range.lower == 0
-    #     assert integer_span.current_range.upper == 9
+    def test_shift_upper_to_value(self, integer_span):
+        """Verifies that the span upper boundary can be shifted to a specific value."""
+        integer_span.shift_upper_to_value(to_value=9)
+        assert integer_span.current_range.lower == 0
+        assert integer_span.current_range.upper == 9
 
-    # def test_shift_edges(self, decimal_span_and_segments):
-    #     """Verifies that the span boundaries can be shifted to the limits."""
-    #     span, segments = decimal_span_and_segments
-    #     span.shift_lower_to_value(Decimal("0.0"))
-    #     span.shift_upper_to_value(Decimal("10.0"))
-    #     assert span.current_range.lower == Decimal("0.0")
-    #     assert span.current_range.upper == Decimal("10.0")
+    def test_shift_edges(self, decimal_span_and_segments):
+        """Verifies that the span boundaries can be shifted to the limits."""
+        span, _ = decimal_span_and_segments
+        span.shift_lower_to_value(to_value=Decimal("0.0"))
+        span.shift_upper_to_value(to_value=Decimal("10.0"))
+        assert span.current_range.lower == Decimal("0.0")
+        assert span.current_range.upper == Decimal("10.0")
 
-    # @pytest.mark.parametrize(
-    #     "span_fixture,range_field_type,value",
-    #     [
-    #         ("integer_span", NumericRange, RANGE_DELTA_VALUE),
-    #         ("big_integer_span", NumericRange, RANGE_DELTA_VALUE),
-    #         ("decimal_span", NumericRange, Decimal("5.0")),  # ToDo: FIX
-    #         ("date_span", DateRange, timezone.now().date() + timedelta(days=RANGE_DELTA_VALUE)),
-    #         ("datetime_span", DateTimeTZRange, timezone.now() + timedelta(days=RANGE_DELTA_VALUE)),
-    #     ],
-    # )
-    # def test_shift_span_by_value(self, span_fixture, range_field_type, value, request):
-    #     """Test that the span can be shifted by a given value."""
-    #     span = request.getfixturevalue(span_fixture)
-    #     original_range = span.current_range
-    #     span.shift_by_value(value)
-    #     assert span.current_range.lower == original_range.lower + value
-    #     assert span.current_range.upper == original_range.upper + value
+    @pytest.mark.parametrize(
+        "span_fixture,range_field_type,value",
+        [
+            ("integer_span", NumericRange, RANGE_DELTA_VALUE),
+            ("big_integer_span", NumericRange, RANGE_DELTA_VALUE),
+            ("decimal_span", NumericRange, Decimal("5.0")),  # ToDo: FIX
+            ("date_span", DateRange, timedelta(days=RANGE_DELTA_VALUE)),
+            ("datetime_span", DateTimeTZRange, timedelta(days=RANGE_DELTA_VALUE)),
+        ],
+    )
+    def test_shift_span_by_value(self, span_fixture, range_field_type, value, request):
+        """Test that the span can be shifted by a given value."""
+        span = request.getfixturevalue(span_fixture)
+        original_range = span.current_range
+        span.shift_by_value(delta_value=value)
+        assert span.current_range.lower == original_range.lower + value
+        assert span.current_range.upper == original_range.upper + value
 
-    #     # Check that the segments were also shifted
-    #     for segment in span.get_segments():
-    #         assert segment.segment_range.lower == original_range.lower + value
-    #         assert segment.segment_range.upper == original_range.upper + value
+        # Check that the segments were also shifted
+        for segment in span.get_active_segments():
+            assert segment.segment_range.lower == original_range.lower + value
+            assert segment.segment_range.upper == original_range.upper + value
 
-    #     # Check range type
-    #     assert isinstance(span.current_range, range_field_type)
+        # Check range type
+        assert isinstance(span.current_range, range_field_type)
 
 
 @pytest.mark.django_db
@@ -133,33 +138,39 @@ class TestDeleteSpan:
         integer_span.delete()
         assert integer_span.deleted_at is not None
 
-    # def test_hard_delete(self, mocker, integer_span):
-    #     """Verifies that the span can be hard deleted."""
-    #     config_mock = mocker.patch(
-    #         "tests.example.models.ConcreteIntegerSpan.get_config_dict", return_value={"soft_delete": False}
-    #     )
-    #     integer_span.delete()
-    #     with pytest.raises(ConcreteIntegerSpan.DoesNotExist):
-    #         ConcreteIntegerSpan.objects.get(id=integer_span.id)
+    def test_hard_delete(self, mocker, integer_span):
+        """Verifies that the span can be hard deleted."""
+        config_mock = mocker.patch(
+            "tests.example.models.ConcreteIntegerSpan.get_config_dict", return_value={"soft_delete": False}
+        )
+        integer_span.delete()
+        with pytest.raises(ConcreteIntegerSpan.DoesNotExist):
+            ConcreteIntegerSpan.objects.get(id=integer_span.id)
 
-    # def test_delete_cascade_to_segments(self, datetime_span_and_segments):
-    #     """Verifies that deleting a span cascades to the segments."""
-    #     span, segments = datetime_span_and_segments
-    #     span.delete()
-    #     for segment in segments:
-    #         assert segment.deleted_at is not None
+    def test_delete_cascade_to_segments(self, datetime_span_and_segments):
+        """Verifies that deleting a span cascades to the segments."""
+        span, segments = datetime_span_and_segments
+
+        span.SpanConfig.soft_delete = True
+        for segment in segments:
+            segment.SegmentConfig.soft_delete = True
+
+        span.delete()
+        for segment in segments:
+            segment.refresh_from_db()
+            assert segment.deleted_at is not None
 
 
 @pytest.mark.django_db
 class TestGetDetails:
     """Tests for getting details about the span."""
 
-    # def test_span_config_dict(self, integer_span):
-    #     """Verifies that the span config dict is created correctly."""
-    #     config = integer_span.get_config_dict()
-    #     assert config["allow_span_gaps"] is True
-    #     assert config["allow_segment_gaps"] is True
-    #     assert config["soft_delete"] is True
+    def test_span_config_dict(self, integer_span):
+        """Verifies that the span config dict is created correctly."""
+        config = integer_span.get_config_dict()
+        assert config["allow_span_gaps"] is True
+        assert config["allow_segment_gaps"] is True
+        assert config["soft_delete"] is True
 
     def test_get_segment_class(self, integer_span):
         """Verifies that the correct segment class is returned for the span."""
@@ -208,18 +219,29 @@ class TestSpanSegments:
         """Verifies that the segments associated with the span are returned correctly."""
         span, segments = integer_span_and_segments
         assert list(span.get_segments()) == segments
+        assert list(span.get_active_segments()) == segments
 
-    # def test_get_segments_with_deleted(self, integer_span_and_segments):
-    #     """Verifies that the segments associated with the span are returned correctly."""
-    #     span, segments = integer_span_and_segments
-    #     segments[0].delete()
-    #     assert list(span.get_segments(include_deleted=True)) == segments
+    def test_get_segments_with_deleted(self, integer_span_and_segments):
+        """Verifies that the segments associated with the span are returned correctly."""
+        span, segments = integer_span_and_segments
+        segments[0].SegmentConfig.soft_delete = True
+        segments[0].delete()
+        assert list(span.get_segments()) == segments
+        assert list(span.get_active_segments()) != segments
 
-    # def test_get_segments_with_deleted_excluded(self, integer_span_and_segments):
-    #     """Verifies that the segments associated with the span are returned correctly."""
-    #     span, segments = integer_span_and_segments
-    #     segments[0].delete()
-    #     assert list(span.get_segments()) == segments[1:]
+    def test_get_active_segments_with_deleted_excluded(self, integer_span_and_segments):
+        """Verifies that the segments associated with the span are returned correctly."""
+        span, [segment1, segment2, segment3] = integer_span_and_segments
+        segment1.SegmentConfig.soft_delete = True
+        segment1.delete()
+        assert list(span.get_active_segments()) == [segment2, segment3]
+
+    def test_first_segment_integer(self, integer_span_and_segments):
+        """Verifies that the first segment is returned correctly."""
+        span, segments = integer_span_and_segments
+
+        first_segment = span.first_segment
+        assert first_segment == segments[0]
 
     def test_first_segment(self, datetime_span_and_segments):
         """Verifies that the first segment is returned correctly."""

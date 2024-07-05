@@ -73,6 +73,6 @@ def test_print_model_fields_command(capfd, mock_models):  # pylint: disable=W061
     # Verify the output for MockSpanModel
     assert "Model: MockSpanModel" in captured.out
     assert "Model: MockSegmentModel" in captured.out
-    assert "range_field_type: DateTimeField" in captured.out
+    assert "range_field_type_name: DateTimeField" in captured.out
     assert "null: True" in captured.out
     assert "blank: True" in captured.out

@@ -151,7 +151,7 @@ class TestBoundaryHelperFactory:
 
     def test_set_lower_boundary(self, concrete_integer_span):  # pylint: disable=W0621
         """Test setting the lower boundary on a model instance."""
-        set_lower_boundary, set_upper_boundary = boundary_helper_factory("current_range")  # pylint: disable=W0612
+        _, set_lower_boundary, set_upper_boundary = boundary_helper_factory("current_range")  # pylint: disable=W0612
 
         assert concrete_integer_span.current_range.lower == 0
 
@@ -163,7 +163,7 @@ class TestBoundaryHelperFactory:
 
     def test_set_upper_boundary(self, concrete_integer_span):  # pylint: disable=W0621
         """Test setting the upper boundary on a model instance."""
-        set_lower_boundary, set_upper_boundary = boundary_helper_factory("current_range")  # pylint: disable=W0612
+        _, set_lower_boundary, set_upper_boundary = boundary_helper_factory("current_range")  # pylint: disable=W0612
 
         assert concrete_integer_span.current_range.upper == 10
 
@@ -203,7 +203,7 @@ class TestBoundaryHelperFactory:
 
     def test_invalid_field_name(self, concrete_integer_span):  # pylint: disable=W0621
         """Test setting a non-existent boundary field on a model."""
-        set_lower_boundary, set_upper_boundary = boundary_helper_factory("non_existent_field")
+        _, set_lower_boundary, set_upper_boundary = boundary_helper_factory("non_existent_field")
 
         with pytest.raises(InvalidRangeFieldNameError):
             set_lower_boundary(concrete_integer_span, 5)
@@ -213,7 +213,7 @@ class TestBoundaryHelperFactory:
 
     def test_invalid_value_type(self, concrete_integer_span):  # pylint: disable=W0621
         """Test that an error is raised for an invalid boundary value type."""
-        set_lower_boundary, set_upper_boundary = boundary_helper_factory("current_range")
+        _, set_lower_boundary, set_upper_boundary = boundary_helper_factory("current_range")
 
         with pytest.raises(ValueError):
             set_lower_boundary(concrete_integer_span, Decimal("5.0"))
@@ -226,7 +226,7 @@ class TestBoundaryHelperFactory:
         assert concrete_integer_span.current_range.lower == 0
         assert concrete_integer_span.current_range.upper == 10
 
-        set_lower_boundary, set_upper_boundary = boundary_helper_factory("current_range")
+        _, set_lower_boundary, set_upper_boundary = boundary_helper_factory("current_range")
         set_lower_boundary(concrete_integer_span, 3)
         set_upper_boundary(concrete_integer_span, 7)
 
@@ -411,7 +411,7 @@ class TestSpanConfigurationHelper:
     def test_boundary_helper_factory_invalid_field(self, concrete_integer_span):  # pylint: disable=W0621
         """Test that an error is raised when trying to create a boundary helper for an invalid field."""
         with pytest.raises(InvalidRangeFieldNameError):
-            _set_lower_boundary, _ = boundary_helper_factory("invalid_range_field")
+            _, _set_lower_boundary, _ = boundary_helper_factory("invalid_range_field")
             _set_lower_boundary(concrete_integer_span, 5)
 
     def test_config_attr_default_value(self, mock_span_model_instance):  # pylint: disable=W0621
@@ -455,7 +455,7 @@ class TestSpanConfigurationHelper:
 
     def test_manipulate_boundaries(self, concrete_decimal_segment):  # pylint: disable=W0621
         """Test that the boundaries can be manipulated on a Segment."""
-        set_lower_boundary, set_upper_boundary = boundary_helper_factory("segment_range")
+        _, set_lower_boundary, set_upper_boundary = boundary_helper_factory("segment_range")
 
         set_lower_boundary(concrete_decimal_segment, Decimal("2.0"))
         set_upper_boundary(concrete_decimal_segment, Decimal("8.0"))
@@ -498,15 +498,25 @@ class TestSpanConfigurationHelper:
             ),
         ],
     )
-    def test_dynamic_range_helper_methods(self, span_fixture, initial_range, lower_value, upper_value, request):
+    def test_dynamic_range_helper_methods(  # pylint: disable=R0913
+        self,
+        span_fixture,
+        initial_range,
+        lower_value,
+        upper_value,
+        request,
+    ):
         """Test that the dynamic range helper methods work as expected."""
         span = request.getfixturevalue(span_fixture)
         span.current_range = initial_range
-        lower_boundary_setter, upper_boundary_setter = boundary_helper_factory("current_range")
+        boundaries_setter, lower_boundary_setter, upper_boundary_setter = boundary_helper_factory("current_range")
 
         lower_boundary_setter(span, lower_value)
         upper_boundary_setter(span, upper_value)
+        assert span.current_range.lower == lower_value
+        assert span.current_range.upper == upper_value
 
+        boundaries_setter(span, lower_value, upper_value)
         assert span.current_range.lower == lower_value
         assert span.current_range.upper == upper_value
 
@@ -684,7 +694,7 @@ class TestBoundaryHelperFactoryValidation:
     def test_validate_value_type_concrete_model(self, mock_span_model_instance):  # pylint: disable=W0621
         """Test that the value type is validated correctly for a concrete model."""
         mock_field_name = "current_range"
-        _, set_upper_boundary = boundary_helper_factory(mock_field_name)
+        *_, set_upper_boundary = boundary_helper_factory(mock_field_name)
         with pytest.raises(
             InvalidRangeFieldNameError,
             match=r"^Invalid range field name: current_range does not exist on MockModel object \(None\)$",

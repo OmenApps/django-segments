@@ -21,7 +21,6 @@ from django.utils import timezone
 from django_segments.app_settings import POSTGRES_RANGE_FIELDS
 from django_segments.helpers.base import BaseHelper
 from django_segments.helpers.segment import (
-    AppendSegmentHelper,
     CreateSegmentHelper,
     DeleteSegmentHelper,
     InsertSegmentHelper,
@@ -97,47 +96,64 @@ class TestCreateSegmentHelper:
         assert segment1.segment_range.lower == segment.segment_range.upper
 
 
-# @pytest.mark.django_db
-# class TestShiftSegmentHelper:
-#     """Tests for the ShiftSegmentHelper class."""
-#     def test_shift_by_value(self, integer_segment):
-#         """Test shifting the segment range by a positive value."""
-#         helper = ShiftSegmentHelper(integer_segment)
-#         shift_value = 2
-#         helper.shift_by_value(shift_value)
-#         assert integer_segment.segment_range == NumericRange(
-#             integer_segment.segment_range.lower + shift_value, integer_segment.segment_range.upper + shift_value
-#         )
+@pytest.mark.django_db
+class TestShiftSegmentHelper:
+    """Tests for the ShiftSegmentHelper class."""
 
-#     def test_shift_by_large_negative_value(self, integer_segment):
-#         """Test shifting the segment range by a large negative value beyond the allowed range."""
-#         helper = ShiftSegmentHelper(integer_segment)
-#         shift_value = -(integer_segment.segment_range.lower + 10)
-#         with pytest.raises(ValueError):
-#             helper.shift_by_value(shift_value)
+    def test_shift_by_value(self, integer_segment):
+        """Test shifting the segment range by a positive value."""
+        initial_segment_range = integer_segment.segment_range
+        helper = ShiftSegmentHelper(integer_segment)
+        shift_value = 2
+        helper.shift_by_value(delta_value=shift_value)
+        assert integer_segment.segment_range == NumericRange(
+            initial_segment_range.lower + shift_value, initial_segment_range.upper + shift_value
+        )
 
-#     def test_shift_by_large_positive_value(self, integer_segment):
-#         """Test shifting the segment range by a large positive value beyond the allowed range."""
-#         helper = ShiftSegmentHelper(integer_segment)
-#         shift_value = integer_segment.segment_range.upper + 10
-#         with pytest.raises(ValueError):
-#             helper.shift_by_value(shift_value)
+    def test_shift_segment_below_span_range(self, integer_segment):
+        """Test shifting the segment range below the span's range causes the span's range to be adjusted."""
+        span_initial_range = integer_segment.span.initial_range
+        assert span_initial_range == integer_segment.segment_range
+
+        helper = ShiftSegmentHelper(integer_segment)
+        shift_value = -(integer_segment.span.current_range.upper - integer_segment.span.current_range.lower) + 1
+        helper.shift_by_value(delta_value=shift_value)
+
+        assert integer_segment.span.current_range == integer_segment.segment_range
+
+    def test_shift_segment_above_span_range(self, integer_segment):
+        """Test shifting the segment range above the span's range causes the span's range to be adjusted."""
+        span_initial_range = integer_segment.span.initial_range
+        assert span_initial_range == integer_segment.segment_range
+
+        helper = ShiftSegmentHelper(integer_segment)
+        shift_value = (integer_segment.span.current_range.upper - integer_segment.span.current_range.lower) + 1
+        helper.shift_by_value(delta_value=shift_value)
+
+        assert integer_segment.span.current_range == integer_segment.segment_range
 
 
-# @pytest.mark.django_db
-# class TestShiftByValueDifferentTypes:
-#     """Tests for the `shift_by_value` method with different value types."""
-#     @pytest.mark.parametrize("helper_class,value", [
-#         (ShiftSegmentHelper, 5),
-#         (ShiftSegmentHelper, Decimal('5.5')),
-#         (ShiftSegmentHelper, timedelta(days=5)),
-#     ])
-#     def test_shift_by_value_different_types(self, integer_segment, helper_class, value):
-#         """Test shifting the segment range by a value of different types."""
-#         helper = helper_class(integer_segment)
-#         helper.shift_by_value(value)
-#         assert integer_segment.segment_range.lower + value == helper.obj.segment_range.lower
-#         assert integer_segment.segment_range.upper + value == helper.obj.segment_range.upper
+@pytest.mark.django_db
+class TestShiftByValueDifferentTypes:
+    """Tests for the `shift_by_value` method with different value types."""
+
+    @pytest.mark.parametrize(
+        "segment, helper_class, value",
+        [
+            ("integer_segment", ShiftSegmentHelper, 5),
+            ("big_integer_segment", ShiftSegmentHelper, 5),
+            ("decimal_segment", ShiftSegmentHelper, Decimal("5.5")),
+            ("date_segment", ShiftSegmentHelper, timedelta(days=5)),
+            ("datetime_segment", ShiftSegmentHelper, timedelta(days=5)),
+        ],
+    )
+    def test_shift_by_value_different_types(self, segment, helper_class, value, request):
+        """Test shifting the segment range by a value of different types."""
+        segment_instance = request.getfixturevalue(segment)
+        helper = helper_class(segment_instance)
+        helper.shift_by_value(delta_value=value)
+        assert segment_instance.segment_range.lower + value == helper.obj.segment_range.lower
+        assert segment_instance.segment_range.upper + value == helper.obj.segment_range.upper
 
 
 @pytest.mark.django_db
@@ -150,7 +166,7 @@ class TestShiftLowerSegmentHelper:
         original_segment_lower = integer_segment.segment_range.lower
 
         helper = ShiftLowerSegmentHelper(integer_segment)
-        helper.shift_lower_by_value(shift_value)
+        helper.shift_lower_by_value(delta_value=shift_value)
         assert integer_segment.segment_range.lower != integer_segment.segment_range.upper
         assert integer_segment.segment_range.lower == (original_segment_lower + shift_value)
         assert integer_segment.segment_range.lower >= integer_segment.span.current_range.lower
@@ -161,7 +177,7 @@ class TestShiftLowerSegmentHelper:
         original_segment_lower = integer_segment.segment_range.lower
 
         helper = ShiftLowerSegmentHelper(integer_segment)
-        helper.shift_lower_by_value(shift_value)
+        helper.shift_lower_by_value(delta_value=shift_value)
         assert integer_segment.segment_range.lower != integer_segment.segment_range.upper
         assert integer_segment.segment_range.lower == (original_segment_lower + shift_value)
         assert integer_segment.segment_range.lower >= integer_segment.span.current_range.lower
@@ -170,7 +186,7 @@ class TestShiftLowerSegmentHelper:
         """Test shifting the lower segment range to a new, higher value."""
         helper = ShiftLowerSegmentHelper(integer_segment)
         new_lower_value = integer_segment.segment_range.lower + 3
-        helper.shift_lower_to_value(new_lower_value)
+        helper.shift_lower_to_value(to_value=new_lower_value)
         assert integer_segment.segment_range.lower == new_lower_value
         assert integer_segment.segment_range.lower >= integer_segment.span.current_range.lower
 
@@ -178,7 +194,7 @@ class TestShiftLowerSegmentHelper:
         """Test shifting the lower segment range to a new, lower value."""
         helper = ShiftLowerSegmentHelper(integer_segment)
         new_lower_value = integer_segment.segment_range.lower - 3
-        helper.shift_lower_to_value(new_lower_value)
+        helper.shift_lower_to_value(to_value=new_lower_value)
         assert integer_segment.segment_range.lower == new_lower_value
         assert integer_segment.segment_range.lower >= integer_segment.span.current_range.lower
 
@@ -186,7 +202,7 @@ class TestShiftLowerSegmentHelper:
         """Test shifting the lower segment range to the current upper boundary."""
         helper = ShiftLowerSegmentHelper(integer_segment)
         with pytest.raises(ValueError):
-            helper.shift_lower_to_value(integer_segment.segment_range.upper)
+            helper.shift_lower_to_value(to_value=integer_segment.segment_range.upper)
 
 
 @pytest.mark.django_db
@@ -199,7 +215,7 @@ class TestShiftUpperSegmentHelper:
         original_segment_upper = integer_segment.segment_range.upper
 
         helper = ShiftUpperSegmentHelper(integer_segment)
-        helper.shift_upper_by_value(shift_value)
+        helper.shift_upper_by_value(delta_value=shift_value)
         assert integer_segment.segment_range.upper != integer_segment.segment_range.lower
         assert integer_segment.segment_range.upper == (original_segment_upper + shift_value)
         assert integer_segment.segment_range.upper <= integer_segment.span.current_range.upper
@@ -210,7 +226,7 @@ class TestShiftUpperSegmentHelper:
         original_segment_upper = integer_segment.segment_range.upper
 
         helper = ShiftUpperSegmentHelper(integer_segment)
-        helper.shift_upper_by_value(shift_value)
+        helper.shift_upper_by_value(delta_value=shift_value)
         assert integer_segment.segment_range.upper != integer_segment.segment_range.lower
         assert integer_segment.segment_range.upper == (original_segment_upper + shift_value)
         assert integer_segment.segment_range.upper <= integer_segment.span.current_range.upper
@@ -219,7 +235,7 @@ class TestShiftUpperSegmentHelper:
         """Test shifting the upper segment range to a new, higher value."""
         helper = ShiftUpperSegmentHelper(integer_segment)
         new_upper_value = integer_segment.segment_range.upper + 3
-        helper.shift_upper_to_value(new_upper_value)
+        helper.shift_upper_to_value(to_value=new_upper_value)
         assert integer_segment.segment_range.upper == new_upper_value
         assert integer_segment.segment_range.upper <= integer_segment.span.current_range.upper
 
@@ -227,7 +243,7 @@ class TestShiftUpperSegmentHelper:
         """Test shifting the upper segment range to a new, lower value."""
         helper = ShiftUpperSegmentHelper(integer_segment)
         new_upper_value = integer_segment.segment_range.upper - 3
-        helper.shift_upper_to_value(new_upper_value)
+        helper.shift_upper_to_value(to_value=new_upper_value)
         assert integer_segment.segment_range.upper == new_upper_value
         assert integer_segment.segment_range.upper <= integer_segment.span.current_range.upper
 
@@ -235,25 +251,26 @@ class TestShiftUpperSegmentHelper:
         """Test shifting the upper segment range to the current lower boundary."""
         helper = ShiftUpperSegmentHelper(integer_segment)
         with pytest.raises(ValueError):
-            helper.shift_upper_to_value(integer_segment.segment_range.lower)
+            helper.shift_upper_to_value(to_value=integer_segment.segment_range.lower)
 
 
-# @pytest.mark.django_db
-# class TestSplitSegmentHelper:
-#     """Tests for the SplitSegmentHelper class."""
-#     def test_split_segment(self, integer_segment):
-#         """Test splitting the segment into two at a specific value."""
-#         helper = SplitSegmentHelper(integer_segment)
-#         split_value = integer_segment.segment_range.lower + 2
-#         _, new_segment = helper.split(split_value)
-#         assert new_segment.segment_range.lower == split_value
-#         assert new_segment.span == integer_segment.span
+@pytest.mark.django_db
+class TestSplitSegmentHelper:
+    """Tests for the SplitSegmentHelper class."""
 
-#     def test_split_segment_at_upper_boundary(self, integer_segment):
-#         """Test splitting the segment exactly at the upper boundary."""
-#         helper = SplitSegmentHelper(integer_segment)
-#         with pytest.raises(ValueError):
-#             helper.split(integer_segment.segment_range.upper)
+    def test_split_segment(self, integer_segment):
+        """Test splitting the segment into two at a specific value."""
+        helper = SplitSegmentHelper(integer_segment)
+        split_value = integer_segment.segment_range.lower + 2
+        new_segment = helper.split(split_value=split_value)
+        assert new_segment.segment_range.lower == split_value
+        assert new_segment.span == integer_segment.span
+
+    def test_split_segment_at_upper_boundary(self, integer_segment):
+        """Test splitting the segment exactly at the upper boundary."""
+        helper = SplitSegmentHelper(integer_segment)
+        with pytest.raises(ValueError):
+            helper.split(split_value=integer_segment.segment_range.upper)
 
 
 @pytest.mark.django_db
@@ -275,41 +292,23 @@ class TestDeleteSegmentHelper:
         assert integer_segment.deleted_at is None
 
 
-# @pytest.mark.django_db
-# class TestAppendSegmentHelper:
-#     """Tests for the AppendSegmentHelper class."""
-#     def test_append_segment(self, integer_span):
-#         """Test appending a segment to the span."""
-#         previous_upper = integer_span.current_range.upper
-#         new_value = previous_upper + 2
-#         helper = AppendSegmentHelper(integer_span)
-#         new_segment = helper.append(new_value)
-#         assert new_segment.segment_range.lower == previous_upper
-#         assert new_segment.segment_range.upper == new_value
+@pytest.mark.django_db
+class TestInsertSegmentHelper:
+    """Tests for the InsertSegmentHelper class."""
 
-#     def test_append_segment_with_invalid_value(self, integer_span):
-#         """Test appending a segment with a value lower than the span's lower boundary."""
-#         helper = AppendSegmentHelper(integer_span)
-#         with pytest.raises(ValueError):
-#             helper.append(integer_span.current_range.lower - 1)
+    def test_insert_segment(self, integer_span):
+        """Test inserting a segment into the span."""
+        segment_range = NumericRange(15, 20)
+        helper = InsertSegmentHelper(integer_span)
+        new_segment = helper.insert(span=integer_span, segment_range=segment_range)
+        assert new_segment.segment_range == segment_range
 
-
-# @pytest.mark.django_db
-# class TestInsertSegmentHelper:
-#     """Tests for the InsertSegmentHelper class."""
-#     def test_insert_segment(self, integer_span):
-#         """Test inserting a segment into the span."""
-#         segment_range = NumericRange(15, 20)
-#         helper = InsertSegmentHelper(integer_span)
-#         new_segment = helper.insert(integer_span, segment_range)
-#         assert new_segment.segment_range == segment_range
-
-#     def test_insert_overlapping_segment(self, integer_span_and_segments):
-#         """Test inserting an overlapping segment should raise an error."""
-#         integer_span, segments = integer_span_and_segments
-#         helper = InsertSegmentHelper(integer_span)
-#         with pytest.raises(ValueError, match="overlapping segments are not allowed"):
-#             helper.insert(integer_span, segments[1].segment_range)
+    def test_insert_overlapping_segment(self, integer_span_and_segments):
+        """Test inserting an overlapping segment should raise an error."""
+        integer_span, segments = integer_span_and_segments
+        helper = InsertSegmentHelper(integer_span)
+        with pytest.raises(ValueError, match="overlapping segments are not allowed"):
+            helper.insert(span=integer_span, segment_range=segments[1].segment_range)
 
 
 @pytest.mark.django_db

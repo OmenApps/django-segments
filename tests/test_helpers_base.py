@@ -39,7 +39,7 @@ def test_base_helper_initialization(segment, expected_field_type, request):
     segment_instance = request.getfixturevalue(segment)
     print(f"{segment_instance=}")
     base_helper = BaseHelper(segment_instance)
-    assert base_helper.field_value_type == expected_field_type
+    assert base_helper.field_value_type_name == expected_field_type
 
 
 @pytest.mark.parametrize(

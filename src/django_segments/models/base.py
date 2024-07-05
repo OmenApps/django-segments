@@ -1,7 +1,12 @@
 """Base classes and metaclasses for AbstractSpan and AbstractSegment models."""
+from __future__ import annotations
 
 import hashlib
 import logging
+import typing
+from datetime import date, datetime
+from decimal import Decimal
+from typing import Optional, Union
 
 from django.contrib.postgres.constraints import ExclusionConstraint
 from django.contrib.postgres.fields import (
@@ -20,6 +25,7 @@ from django.db.backends.postgresql.psycopg_any import (
     Range,
 )
 from django.db.models import F, Q
+from django.utils import timezone
 from django.utils.translation import gettext as _
 
 from django_segments.app_settings import (
@@ -44,88 +50,137 @@ from django_segments.exceptions import (
 
 logger = logging.getLogger(__name__)
 
+if typing.TYPE_CHECKING:
+    from django_segments.models import AbstractSegment, AbstractSpan
+
 
 def generate_short_hash(name: str, salt: str = "", length: int = 8) -> str:
     """Generate a hash for the given name string."""
     return hashlib.sha256(f"{salt}{name}".encode()).hexdigest()[:length]
 
 
-def boundary_helper_factory(range_field_name):
-    """Factory function to create set_lower_boundary and set_upper_boundary model methods for a given range field.
+def boundary_helper_factory(range_field_name: str) -> tuple:
+    """Factory function to create model methods for setting boundaries on a given range field.
 
     Args:
         range_field_name (str): The name of the range field.
 
     Returns:
-        tuple: A tuple containing the set_lower_boundary and set_upper_boundary methods.
+        tuple: A tuple containing the set_boundaries, set_lower_boundary, and set_upper_boundary methods.
     """
 
-    def _set_boundary(instance, range_field_name, lower=None, upper=None):
-        """Set the boundary of the range field."""
-        range_field = getattr(instance, range_field_name, None)
+    def _set_boundary(
+        instance: Union[AbstractSpan, AbstractSegment],
+        range_field_name: str,
+        lower: Optional[int] = None,
+        upper: Optional[int] = None,
+    ):
+        """Set the lower, upper, or both boundaries of the range field."""
+        model_range_field = getattr(instance, range_field_name, None)
 
-        if range_field is None:
+        if model_range_field is None:
             raise InvalidRangeFieldNameError(
                 f"Invalid range field name: {range_field_name} does not exist on {instance}"
             )
 
-        validate_value_type(instance=instance, value=lower if lower is not None else upper)
+        if lower is not None:
+            validate_value_type(instance=instance, value=lower)
+        if upper is not None:
+            validate_value_type(instance=instance, value=upper)
 
-        RangeFieldClass = get_range_field_class(instance)  # pylint: disable=C0103
+        RangeClass = get_range_type(instance)  # pylint: disable=C0103
 
         if lower is not None:
-            print(f"boundary_helper_factory _set_boundary: [{lower=} {range_field.upper=})")
-            range_field = RangeFieldClass(lower=lower, upper=range_field.upper)
+            print(f"boundary_helper_factory _set_boundary: [{lower=} {model_range_field.upper=})")
+            range_value = RangeClass(lower=lower, upper=model_range_field.upper)
 
-        if upper is not None:
-            print(f"boundary_helper_factory _set_boundary: [{range_field.lower=} {upper=})")
-            range_field = RangeFieldClass(lower=range_field.lower, upper=upper)
+            # Set both boundaries
+            if upper is not None:
+                print(f"boundary_helper_factory _set_boundary: [{lower=} {upper=})")
+                range_value = RangeClass(lower=lower, upper=upper)
 
-        setattr(instance, range_field_name, range_field)
+        elif upper is not None:
+            print(f"boundary_helper_factory _set_boundary: [{model_range_field.lower=} {upper=})")
+            range_value = RangeClass(lower=model_range_field.lower, upper=upper)
+
+        else:
+            raise ValueError("At least one of 'lower' or 'upper' must be provided to set boundaries.")
+
+        # Set the value of the model field to the new range value
+        setattr(instance, range_field_name, range_value)
         instance.save()
 
-    def validate_value_type(instance, value):
+    def validate_value_type(
+        instance: Union[AbstractSpan, AbstractSegment],
+        value: Union[int, Decimal, date, datetime],
+    ) -> None:
         """Validate the type of the provided value against the range_field_type."""
         if value is None:
             raise ValueError("Value cannot be None")
 
         SpanConfig = get_span_config(instance)  # pylint: disable=C0103
 
-        if SpanConfig.range_field_type.__name__ not in POSTGRES_RANGE_FIELDS:
+        if SpanConfig.range_field_type not in POSTGRES_RANGE_FIELDS:
             raise IncorrectRangeTypeError(f"Unsupported field type: {SpanConfig.range_field_type}")
 
-        field_type = POSTGRES_RANGE_FIELDS[SpanConfig.range_field_type.__name__].get("type")
+        field_type = POSTGRES_RANGE_FIELDS[SpanConfig.range_field_type].get("value_type")
 
         if not isinstance(value, field_type):
             raise ValueError(f"Value must be of type {field_type}, not {type(value)}")
 
-    def get_range_field_class(instance):
-        """Get the range field class for the instance."""
+    # def validate_delta_value_type(
+    #     instance: Union[AbstractSpan, AbstractSegment],
+    #     delta_value: Union[int, Decimal, timezone.timedelta],
+    # ) -> None:
+    #     """Validate the type of the provided delta value against the range_field_type."""
+    #     if delta_value is None:
+    #         raise ValueError("Delta value cannot be None")
+
+    #     SpanConfig = get_span_config(instance)  # pylint: disable=C0103
+
+    #     if SpanConfig.range_field_type not in POSTGRES_RANGE_FIELDS:
+    #         raise IncorrectRangeTypeError(f"Unsupported field type: {SpanConfig.range_field_type}")
+
+    #     delta_type = POSTGRES_RANGE_FIELDS[SpanConfig.range_field_type].get("delta_type")
+
+    #     if not isinstance(delta_value, delta_type):
+    #         raise ValueError(f"Delta value must be of type {delta_type}, not {type(delta_value)}")
+
+    def get_range_type(instance: Union[AbstractSpan, AbstractSegment]):
+        """Get the range class for the instance based on the range_field_type."""
         try:
-            RangeFieldClass = POSTGRES_RANGE_FIELDS[  # pylint: disable=C0103
-                instance.SpanConfig.range_field_type.__name__
-            ]["range"]
+            span_config = get_span_config(instance)  # pylint: disable=C0103
+            RangeClass = POSTGRES_RANGE_FIELDS[span_config.range_field_type]["range_type"]  # pylint: disable=C0103
 
         except AttributeError as e:
             raise IncorrectRangeTypeError(f"Range type cannot be obtained for {instance.__class__.__name__}") from e
 
-        return RangeFieldClass
+        return RangeClass
 
-    def get_span_config(instance):
+    def get_span_config(instance: Union[AbstractSpan, AbstractSegment]):
         """Return the SpanConfig class for the instance."""
         if not hasattr(instance, "SpanConfig"):
             instance.SpanConfig = SegmentConfigurationHelper.get_span_model(instance).SpanConfig
         return instance.SpanConfig
 
-    def set_lower_boundary(instance, value):
+    def set_boundaries(
+        instance: Union[AbstractSpan, AbstractSegment],
+        lower: Union[int, Decimal, date, datetime],
+        upper: Union[int, Decimal, date, datetime],
+    ):
+        """Set the lower and upper boundaries of the specified range field."""
+        _set_boundary(instance, range_field_name, lower=lower, upper=upper)
+
+    def set_lower_boundary(instance: Union[AbstractSpan, AbstractSegment], value: Union[int, Decimal, date, datetime]):
         """Set the lower boundary of the specified range field."""
         _set_boundary(instance, range_field_name, lower=value)
 
-    def set_upper_boundary(instance, value):
+    def set_upper_boundary(instance: Union[AbstractSpan, AbstractSegment], value: Union[int, Decimal, date, datetime]):
         """Set the upper boundary of the specified range field."""
         _set_boundary(instance, range_field_name, upper=value)
 
     return (
+        set_boundaries,
         set_lower_boundary,
         set_upper_boundary,
     )
@@ -135,7 +190,7 @@ class ConcreteModelValidationHelper:  # pylint: disable=R0903
     """Helper class for validating that models are concrete."""
 
     @staticmethod
-    def check_model_is_concrete(model) -> None:
+    def check_model_is_concrete(model: Union[AbstractSpan, AbstractSegment]) -> None:
         """Check that the model is not abstract."""
         if model._meta.abstract:  # pylint: disable=W0212
             raise IncorrectSubclassError("Concrete subclasses must not be abstract")
@@ -153,17 +208,17 @@ class SpanConfigurationHelper:
         return getattr(model.SpanConfig, attr_name, default)
 
     @staticmethod
-    def get_range_field_type(model):
+    def get_range_field_type(model: AbstractSpan) -> Range:
         """Return the range field type for the span model after performing some validation."""
         range_field_type = SpanConfigurationHelper.get_config_attr(model, "range_field_type", None)
 
-        if not range_field_type or range_field_type.__name__ not in POSTGRES_RANGE_FIELDS:
+        if not range_field_type or range_field_type not in POSTGRES_RANGE_FIELDS:
             raise IncorrectRangeTypeError(f"Unsupported range type for {model.__class__.__name__}")
 
         return range_field_type
 
     @staticmethod
-    def get_config_dict(model) -> dict:
+    def get_config_dict(model: AbstractSpan) -> dict:
         """Return the configuration options for the span as a dictionary."""
         return {
             "allow_span_gaps": SpanConfigurationHelper.get_config_attr(model, "allow_span_gaps", ALLOW_SPAN_GAPS),
@@ -175,7 +230,7 @@ class SpanConfigurationHelper:
         }
 
     @staticmethod
-    def get_segment_class(model_instance):
+    def get_segment_class(model_instance: AbstractSpan) -> AbstractSegment:
         """Get the segment class associated with the span model.
 
         The Segment model has a `span` ForeignKey field that points to the span model. This method returns the Segment
@@ -202,7 +257,7 @@ class SegmentConfigurationHelper:
             raise IncorrectSubclassError(f"SegmentConfig attribute not defined for {model.__class__.__name__}") from e
 
     @staticmethod
-    def get_span_model(model):
+    def get_span_model(model: AbstractSegment) -> AbstractSpan:
         """Return the span model for the segment model."""
         span_model = SegmentConfigurationHelper.get_config_attr(model, "span_model", None)
 
@@ -212,7 +267,7 @@ class SegmentConfigurationHelper:
         return span_model
 
     @staticmethod
-    def get_config_dict(model) -> dict:
+    def get_config_dict(model: AbstractSegment) -> dict:
         """Return a dictionary of configuration options."""
         return {
             "span_model": SegmentConfigurationHelper.get_span_model(model),

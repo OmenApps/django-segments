@@ -86,12 +86,6 @@ class TestSettingFixtureValues:
         assert integer_span.current_range.lower == integer_span.initial_range.lower
         assert integer_span.current_range.upper == integer_span.initial_range.upper
 
-    def test_integer_segment_creation(self, integer_segment, integer_span):
-        """Test that an integer segment can be created."""
-        assert integer_segment.segment_range.lower == integer_span.current_range.lower
-        assert integer_segment.segment_range.upper == integer_span.current_range.lower + RANGE_DELTA_VALUE
-        assert integer_segment.span == integer_span
-
     def test_integer_span_and_segments_creation(self, integer_span_and_segments):
         """Test that an integer span with multiple segments can be created."""
         _, segments = integer_span_and_segments
@@ -109,12 +103,6 @@ class TestSettingFixtureValues:
         assert big_integer_span.initial_range.upper == RANGE_DELTA_VALUE
         assert big_integer_span.current_range.lower == big_integer_span.initial_range.lower
         assert big_integer_span.current_range.upper == big_integer_span.initial_range.upper
-
-    def test_big_integer_segment_creation(self, big_integer_segment, big_integer_span):
-        """Test that a big integer segment can be created."""
-        assert big_integer_segment.segment_range.lower == big_integer_span.current_range.lower
-        assert big_integer_segment.segment_range.upper == big_integer_span.current_range.lower + RANGE_DELTA_VALUE
-        assert big_integer_segment.span == big_integer_span
 
     def test_big_integer_span_and_segments_creation(self, big_integer_span_and_segments):
         """Test that a big integer span with multiple segments can be created."""
@@ -134,14 +122,6 @@ class TestSettingFixtureValues:
         assert decimal_span.current_range.lower == decimal_span.initial_range.lower
         assert decimal_span.current_range.upper == decimal_span.initial_range.upper
 
-    def test_decimal_segment_creation(self, decimal_segment, decimal_span):
-        """Test that a decimal segment can be created."""
-        assert decimal_segment.segment_range.lower == decimal_span.current_range.lower
-        assert decimal_segment.segment_range.upper == decimal_span.current_range.lower + Decimal(
-            f"{RANGE_DELTA_VALUE}.0"
-        )
-        assert decimal_segment.span == decimal_span
-
     def test_decimal_span_and_segments_creation(self, decimal_span_and_segments):
         """Test that a decimal span with multiple segments can be created."""
         _, segments = decimal_span_and_segments
@@ -159,12 +139,6 @@ class TestSettingFixtureValues:
         assert date_span.current_range.lower == date_span.initial_range.lower
         assert date_span.current_range.upper == date_span.initial_range.upper
 
-    def test_date_segment_creation(self, date_segment, date_span):
-        """Test that a date segment can be created."""
-        assert date_segment.segment_range.lower == date_span.current_range.lower
-        assert date_segment.segment_range.upper == date_span.current_range.lower + timedelta(days=RANGE_DELTA_VALUE)
-        assert date_segment.span == date_span
-
     def test_date_span_and_segments_creation(self, date_span_and_segments):
         """Test that a date span with multiple segments can be created."""
         _, segments = date_span_and_segments
@@ -181,14 +155,6 @@ class TestSettingFixtureValues:
         assert datetime_span.initial_range.lower < datetime_span.initial_range.upper
         assert datetime_span.current_range.lower == datetime_span.initial_range.lower
         assert datetime_span.current_range.upper == datetime_span.initial_range.upper
-
-    def test_datetime_segment_creation(self, datetime_segment, datetime_span):
-        """Test that a datetime segment can be created."""
-        assert datetime_segment.segment_range.lower == datetime_span.current_range.lower
-        assert datetime_segment.segment_range.upper == datetime_span.current_range.lower + timedelta(
-            days=RANGE_DELTA_VALUE
-        )
-        assert datetime_segment.span == datetime_span
 
     def test_datetime_span_and_segments_creation(self, datetime_span_and_segments):
         """Test that a datetime span with multiple segments can be created."""

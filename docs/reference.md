@@ -24,19 +24,47 @@ Package settings.
 
 .. data:: POSTGRES_RANGE_FIELDS
 
-    Dictionary of field name and Python type that should be used to represent the range field. Default is:
+    Dictionary of model range fields and the associated Python types that should be used to represent a boundary value, a delta value, and a range. Default is:
 
     .. code-block:: python
 
         {
-            IntegerRangeField.__name__: int,
-            BigIntegerRangeField.__name__: int,
-            DecimalRangeField.__name__: Decimal,
-            DateRangeField.__name__: date,
-            DateTimeRangeField.__name__: datetime,
+            IntegerRangeField: {
+                "value_type": int,
+                "delta_type": int,
+                "range_type": NumericRange,
+            },
+            BigIntegerRangeField: {
+                "value_type": int,
+                "delta_type": int,
+                "range_type": NumericRange,
+            },
+            DecimalRangeField: {
+                "value_type": Decimal,
+                "delta_type": Decimal,
+                "range_type": NumericRange,
+            },
+            DateRangeField: {
+                "value_type": date,
+                "delta_type": timezone.timedelta,
+                "range_type": DateRange,
+            },
+            DateTimeRangeField: {
+                "value_type": datetime,
+                "delta_type": timezone.timedelta,
+                "range_type": DateTimeTZRange,
+            }
         }
 
-    This is used to convert the range field to a Python type when using the :meth:`django_segments.models.base.BaseSpanMetaclass.get_range_field` method.
+    This is used to convert the range field to a Python type, and for validation when creating a new Span or Segment.
+
+.. data:: DEFAULT_RELATED_NAME
+
+    Default related name for the Span and Segment models. Default is ``%(app_label)s_%(class)s_related``.
+
+.. data:: DEFAULT_RELATED_QUERY_NAME
+
+    Default related query name for the Span and Segment models. Default is ``%(app_label)s_%(class)ss``.
 
 Global Span Configuration Options
 ---------------------------------
@@ -84,11 +112,11 @@ more of the corresponding setting names in lowercase to the segment model. Examp
 
 .. data:: PREVIOUS_FIELD_ON_DELETE
 
-    The behavior to use when deleting a segment or span that has a previous segment or span. Default is :attr:`django.db.models.CASCADE`.
+    The behavior to use when deleting a segment that has a previous segment. Default is :attr:`django.db.models.CASCADE`.
 
 -- data:: SPAN_ON_DELETE
 
-    The behavior to use when deleting a span. Default is :attr:`django.db.models.CASCADE`.
+    The behavior to use for segment instances with foreign key to a deleted span. Default is :attr:`django.db.models.CASCADE`.
 
 
 

@@ -59,7 +59,7 @@ class CreateSegmentHelper:
 
     def __init__(
         self,
-        *args,
+        *,
         span: AbstractSpan,
         segment_range: Union[Range, DateRange, DateTimeTZRange, NumericRange],
         **kwargs,
@@ -69,7 +69,6 @@ class CreateSegmentHelper:
         self.segment_instance = None
         self.sement_class = self.span.get_segment_class()
 
-        self.args = args
         self.kwargs = kwargs
 
     @transaction.atomic
@@ -85,20 +84,19 @@ class CreateSegmentHelper:
 
         if overlapping_segments.exists():
             raise ValueError(
-                f"Cannot create segment: proposed range overlaps with the following existing segment(s): {overlapping_segments}"
+                "Cannot create segment: proposed range overlaps with the following existing segment(s): "
+                f"{overlapping_segments}"
             )
 
-        self.segment_instance = self.sement_class(
-            span=self.span, segment_range=self.segment_range, *self.args, **self.kwargs
-        )
+        self.segment_instance = self.sement_class(span=self.span, segment_range=self.segment_range, **self.kwargs)
 
         with SpanUpdateSignalContext(self.span):
-            with SegmentCreateSignalContext(self.span, self.segment_range, *self.args, **self.kwargs) as context:
+            with SegmentCreateSignalContext(span=self.span, segment_range=self.segment_range, **self.kwargs) as context:
                 # Extend the span to include the new segment range if needed
                 helper = ExtendSpanHelper(self.span)
-                helper.extend_to_value(self.segment_range)
+                helper.extend_to(value=self.segment_range)
 
-                self.validate_segment_range()
+                self._validate_segment_range()
 
                 self.segment_instance.save()
                 context.kwargs["segment"] = self.segment_instance
@@ -112,19 +110,21 @@ class CreateSegmentHelper:
         # Adjust adjacent segments if not allowing segment gaps for this span
         if not self.span.get_config_dict().get("allow_segment_gaps"):
             print(
-                f"About to call adjust_adjacent_segments with {self.segment_instance=} which has {self.segment_instance.previous=} and {self.segment_instance.next=}"
+                f"About to call adjust_adjacent_segments with {self.segment_instance=} which has "
+                f"{self.segment_instance.previous=} and {self.segment_instance.next=}"
             )
-            self.adjust_adjacent_segments()
+            self._adjust_adjacent_segments()
 
         # Refresh self.segment_instance from the db
         self.segment_instance.refresh_from_db()
 
-        print(
-            f"Returning {self.segment_instance=} with {self.segment_instance.previous=} and {self.segment_instance.next=}"
-        )
+        # print(
+        #     f"Returning {self.segment_instance=} with "
+        #     f"{self.segment_instance.previous=} and {self.segment_instance.next=}"
+        # )
         return self.segment_instance
 
-    def adjust_adjacent_segments(self):
+    def _adjust_adjacent_segments(self):
         """Adjust the adjacent segments if not allowing segment gaps."""
 
         prev_segment = self.segment_instance.previous
@@ -134,11 +134,13 @@ class CreateSegmentHelper:
         print(f"Number of segments in span: {len(self.span.get_active_segments())}")
         if prev_segment:
             print(
-                f"BEFORE Compared to previous: {prev_segment.segment_range.upper=} {self.segment_instance.segment_range.lower=}"
+                f"BEFORE Compared to previous: {prev_segment.segment_range.upper=} "
+                f"{self.segment_instance.segment_range.lower=}"
             )
         if next_segment:
             print(
-                f"BEFORE Compared to next: {next_segment.segment_range.lower=} {self.segment_instance.segment_range.upper=}"
+                f"BEFORE Compared to next: {next_segment.segment_range.lower=} "
+                f"{self.segment_instance.segment_range.upper=}"
             )
 
         if prev_segment and prev_segment.segment_range.upper != self.segment_instance.segment_range.lower:
@@ -155,14 +157,16 @@ class CreateSegmentHelper:
 
         if prev_segment:
             print(
-                f"AFTER Compared to previous: {prev_segment.segment_range.upper=} {self.segment_instance.segment_range.lower=}"
+                f"AFTER Compared to previous: {prev_segment.segment_range.upper=} "
+                f"{self.segment_instance.segment_range.lower=}"
             )
         if next_segment:
             print(
-                f"AFTER Compared to next: {next_segment.segment_range.lower=} {self.segment_instance.segment_range.upper=}"
+                f"AFTER Compared to next: {next_segment.segment_range.lower=} "
+                f"{self.segment_instance.segment_range.upper=}"
             )
 
-    def validate_segment_range(self):
+    def _validate_segment_range(self):
         """Validate the segment range based on the span and any adjacent segments."""
         if (
             self.segment_range.lower < self.span.current_range.lower
@@ -172,7 +176,10 @@ class CreateSegmentHelper:
 
 
 class SegmentHelperBase(BaseHelper):
-    """Base class for segment helpers."""
+    """Base class for segment helpers.
+
+    Cannot be used directly.
+    """
 
     def __new__(cls, *args, **kwargs):
         """Ensure that only children of this class are instantiated."""
@@ -184,7 +191,7 @@ class SegmentHelperBase(BaseHelper):
         super().__init__(obj)
         self.config_dict = SegmentConfigurationHelper().get_config_dict(obj)
 
-    def validate_segment_range(self, segment_range: Union[Range, DateRange, DateTimeTZRange, NumericRange]):
+    def validate_segment_range(self, *, segment_range: Union[Range, DateRange, DateTimeTZRange, NumericRange]):
         """Validate the segment range based on the span and any adjacent segments."""
         if segment_range.lower < self.obj.segment_range.lower or segment_range.upper > self.obj.segment_range.upper:
             raise ValueError("Segment range must be within the span's current range.")
@@ -208,29 +215,30 @@ class SegmentHelperBase(BaseHelper):
         """Get the segment class from the instance, useful when creating new segments dynamically."""
         return self.obj.__class__
 
-    def calculate_new_boundary(
-        self,
-        current_boundary: Union[int, Decimal, datetime, date],
-        delta_value: Union[int, Decimal, datetime, date],
-    ) -> Union[int, Decimal, datetime, date]:
-        """Calculate the new boundary value."""
-        new_boundary = delta_value + current_boundary
-        return new_boundary
-
 
 class ShiftSegmentHelper(SegmentHelperBase):
-    """Helper class for shifting an entire segment."""
+    """Helper class for shifting an entire segment.
+
+    Usage:
+
+    .. code-block:: python
+
+        segment = MySegment.objects.get(id=1)
+        helper = ShiftSegmentHelper(segment)
+        helper.shift_by_value(delta_value=10)
+    """
 
     @transaction.atomic
-    def shift_by_value(self, value: Union[int, Decimal, timezone.timedelta]):
+    def shift_by_value(self, *, delta_value: Union[int, Decimal, timezone.timedelta]):
         """Shift the range value of the entire Segment."""
-        self.validate_value_type(value)
+        self.validate_delta_value_type(delta_value)
 
         with SpanUpdateSignalContext(self.obj.span):
             # Adjust the lower and upper boundary by the provided value
             with SegmentUpdateSignalContext(self.obj):
-                self.obj.set_lower_boundary(self.obj.segment_range.lower + value)
-                self.obj.set_upper_boundary(self.obj.segment_range.upper + value)
+                self.obj.set_boundaries(
+                    self.obj.segment_range.lower + delta_value, self.obj.segment_range.upper + delta_value
+                )
                 self.obj.save()
 
 
@@ -243,36 +251,41 @@ class ShiftLowerSegmentHelper(SegmentHelperBase):
 
         segment = MySegment.objects.get(id=1)
         helper = ShiftLowerSegmentHelper(segment)
-        helper.shift_lower_by_value(10)
+        helper.shift_lower_by_value(delta_value=10)
+
+        # Alternatively, you can shift the lower boundary to a specific value:
+        helper.shift_lower_to_value(to_value=10)
     """
 
     @transaction.atomic
-    def shift_lower_by_value(self, value: Union[int, Decimal, timezone.timedelta]):
-        """Shift the lower boundary of the Segment's segment_range by the given value."""
-        self.validate_value_type(value)
-        new_lower = self.calculate_new_boundary(self.obj.segment_range.lower, value)
+    def shift_lower_by_value(self, *, delta_value: Union[int, Decimal, timezone.timedelta]):
+        """Shift the lower boundary of the Segment's segment_range by the given delta_value."""
+        self.validate_delta_value_type(delta_value)
+        new_lower = self.obj.segment_range.lower + delta_value
 
-        self.shift_lower_to_value(new_lower)
+        self.shift_lower_to_value(to_value=new_lower)
 
     @transaction.atomic
-    def shift_lower_to_value(self, new_value: Union[int, Decimal, timezone.timedelta]):
+    def shift_lower_to_value(self, *, to_value: Union[int, Decimal, timezone.timedelta]):
         """Shift the lower boundary of the Segment's segment_range to the given value."""
         # Validate the value type
-        self.validate_value_type(new_value)
+        self.validate_value_type(to_value)
 
-        # Make sure the new_value is less than the upper boundary
-        if new_value >= self.obj.segment_range.upper:
+        # Make sure the to_value is less than the upper boundary
+        if to_value >= self.obj.segment_range.upper:
             raise ValueError("New lower boundary must be less than the current upper boundary.")
 
-        print(f"Shifting lower boundary from {self.obj.segment_range.lower} to {new_value}")
+        print(f"Shifting lower boundary from {self.obj.segment_range.lower} to {to_value}")
 
         with SpanUpdateSignalContext(self.obj.span):
-            # If new_value is less than the span's lower boundary, extend the span
-            if new_value < self.obj.span.current_range.lower:
-                ExtendSpanHelper(self.obj.span).extend_to_value(new_value)
+            # If to_value is less than the span's lower boundary, extend the span
+            if to_value < self.obj.span.current_range.lower:
+                ExtendSpanHelper(self.obj.span).extend_to(value=to_value)
             # Shift the lower boundary to the new value
             with SegmentUpdateSignalContext(self.obj):
-                self.obj.segment_range = self.set_boundary(self.obj.segment_range, new_value, BoundaryType.LOWER)
+                self.obj.segment_range = self.set_boundary(
+                    range_field=self.obj.segment_range, new_boundary=to_value, boundary_type=BoundaryType.LOWER
+                )
                 self.obj.save()
 
 
@@ -285,36 +298,41 @@ class ShiftUpperSegmentHelper(SegmentHelperBase):
 
         segment = MySegment.objects.get(id=1)
         helper = ShiftUpperSegmentHelper(segment)
-        helper.shift_upper_by_value(10)
+        helper.shift_upper_by_value(delta_value=10)
+
+        # Alternatively, you can shift the upper boundary to a specific value:
+        helper.shift_upper_to_value(to_value=10)
     """
 
     @transaction.atomic
-    def shift_upper_by_value(self, value: Union[int, Decimal, timezone.timedelta]):
-        """Shift the upper boundary of the Segment's segment_range by the given value."""
-        self.validate_value_type(value)
-        new_upper = self.calculate_new_boundary(self.obj.segment_range.upper, value)
+    def shift_upper_by_value(self, *, delta_value: Union[int, Decimal, timezone.timedelta]):
+        """Shift the upper boundary of the Segment's segment_range by the given delta_value."""
+        self.validate_delta_value_type(delta_value)
+        to_value = self.obj.segment_range.upper + delta_value
 
-        self.shift_upper_to_value(new_upper)
+        self.shift_upper_to_value(to_value=to_value)
 
     @transaction.atomic
-    def shift_upper_to_value(self, new_value: Union[int, Decimal, timezone.timedelta]):
+    def shift_upper_to_value(self, *, to_value: Union[int, Decimal, timezone.timedelta]):
         """Shift the upper boundary of the Segment's segment_range to the given value."""
         # Validate the value type
-        self.validate_value_type(new_value)
+        self.validate_value_type(to_value)
 
-        # Make sure the new_value is greater than the lower boundary
-        if new_value <= self.obj.segment_range.lower:
+        # Make sure the  is greater than the lower boundary
+        if to_value <= self.obj.segment_range.lower:
             raise ValueError("New upper boundary must be greater than the current lower boundary.")
 
-        print(f"Shifting upper boundary from {self.obj.segment_range.upper} to {new_value}")
+        print(f"Shifting upper boundary from {self.obj.segment_range.upper} to {to_value}")
 
         with SpanUpdateSignalContext(self.obj.span):
-            # If new_value is greater than the span's upper boundary, extend the span
-            if new_value > self.obj.span.current_range.upper:
-                ExtendSpanHelper(self.obj.span).extend_to_value(new_value)
+            # If to_value is greater than the span's upper boundary, extend the span
+            if to_value > self.obj.span.current_range.upper:
+                ExtendSpanHelper(self.obj.span).extend_to(value=to_value)
             # Shift the upper boundary to the new value
             with SegmentUpdateSignalContext(self.obj):
-                self.obj.segment_range = self.set_boundary(self.obj.segment_range, new_value, BoundaryType.UPPER)
+                self.obj.segment_range = self.set_boundary(
+                    range_field=self.obj.segment_range, new_boundary=to_value, boundary_type=BoundaryType.UPPER
+                )
                 self.obj.save()
 
 
@@ -336,11 +354,14 @@ class SplitSegmentHelper(SegmentHelperBase):
     """
 
     @transaction.atomic
-    def split(self, split_value: Union[int, Decimal, timezone.timedelta], fields_to_copy: Optional[List[str]] = None):
+    def split(
+        self, *, split_value: Union[int, Decimal, timezone.timedelta], fields_to_copy: Optional[List[str]] = None
+    ) -> AbstractSegment:
         """Split the segment into two at the provided split value."""
         self.validate_value_type(split_value)
 
-        RangeClass = self.range_field_type  # pylint: disable=C0103
+        RangeClass = self.range_type  # pylint: disable=C0103
+        print(f"{RangeClass=} {type(RangeClass)=}")
 
         with SpanUpdateSignalContext(self.obj.span):
             # Update the provided segment with its new upper boundary (split value)
@@ -350,7 +371,11 @@ class SplitSegmentHelper(SegmentHelperBase):
 
             # Create a new segment with the split value as the lower boundary
             with SegmentCreateSignalContext(
-                self.obj.span, RangeClass(lower=split_value, upper=self.obj.segment_range.upper)
+                span=self.obj.span,
+                segment_range=RangeClass(
+                    lower=split_value,
+                    upper=self.obj.segment_range.upper,
+                ),
             ) as context:
                 new_segment_data = {field: getattr(self.obj, field, None) for field in fields_to_copy or []}
 
@@ -360,7 +385,7 @@ class SplitSegmentHelper(SegmentHelperBase):
                 ).create()
                 context.kwargs["segment"] = new_segment
 
-        return self.obj, new_segment
+        return new_segment
 
 
 class MergeSegmentHelper(SegmentHelperBase):
@@ -373,6 +398,9 @@ class MergeSegmentHelper(SegmentHelperBase):
         segment = MySegment.objects.get(id=1)
         helper = MergeSegmentHelper(segment)
         helper.merge_into_upper()
+
+        # Alternatively, you can merge the segment into the previous segment:
+        helper.merge_into_lower()
     """
 
     @transaction.atomic
@@ -446,35 +474,6 @@ class DeleteSegmentHelper(SegmentHelperBase):
             self.obj.save()
 
 
-class AppendSegmentHelper(SegmentHelperBase):
-    """Helper class for appending segments.
-
-    Usage:
-
-    .. code-block:: python
-
-        segment = MySegment.objects.get(id=1)
-        helper = AppendSegmentHelper(segment)
-        new_segment = helper.append(10)
-    """
-
-    @transaction.atomic
-    def append(self, value: Union[int, Decimal, timezone.timedelta]):
-        """Append a segment with upper boundary set to the provided value."""
-        if value <= self.obj.span.current_range.lower:
-            raise ValueError("Value for the new segment must be greater than the span's lower boundary.")
-
-        RangeClass = self.range_field_type  # pylint: disable=C0103
-
-        new_segment_range = RangeClass(self.obj.span.current_range.upper, value)
-
-        new_segment = CreateSegmentHelper(
-            *self.args, span=self.obj.span, segment_range=new_segment_range, **self.kwargs
-        ).create()
-
-        return new_segment
-
-
 class InsertSegmentHelper(SegmentHelperBase):
     """Helper class for inserting segments.
 
@@ -484,16 +483,16 @@ class InsertSegmentHelper(SegmentHelperBase):
 
         segment = MySegment.objects.get(id=1)
         helper = InsertSegmentHelper(segment)
-        new_segment = helper.insert(span, segment_range)
+        new_segment = helper.insert(span=span, segment_range=segment_range)
     """
 
     @transaction.atomic
-    def insert(self, span: AbstractSpan, segment_range: Union[Range, DateRange, DateTimeTZRange, NumericRange]):
-        """Insert a new segment into the span."""
-        self.validate_segment_range(segment_range)
+    def insert(self, *, span: AbstractSpan, segment_range: Union[Range, DateRange, DateTimeTZRange, NumericRange]):
+        """Insert a new segment into the span."""  # ToDo: This should be similar to split, ind include the fields_to_copy
+        self.validate_segment_range(segment_range=segment_range)
 
         with SpanUpdateSignalContext(span):
-            with SegmentCreateSignalContext(span, segment_range) as context:
+            with SegmentCreateSignalContext(span=span, segment_range=segment_range) as context:
                 new_segment = CreateSegmentHelper(span=span, segment_range=segment_range).create()
                 context.kwargs["segment"] = new_segment
 

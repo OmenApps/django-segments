@@ -65,12 +65,12 @@ class Command(BaseCommand):
 
     def get_field_details(self, field: models.Field) -> Dict[str, Any]:
         """Get the details of the given field."""
-        range_field_type = (
+        range_field_type_name = (
             field.get_internal_type() if not getattr(field, "one_to_many", False) else "Reverse of a ForeignKey"
         )
 
         return {
-            "range_field_type": range_field_type,
+            "range_field_type_name": range_field_type_name,
             "null": getattr(field, "null", None),
             "blank": getattr(field, "blank", None),
             "default": self.get_field_default(field),

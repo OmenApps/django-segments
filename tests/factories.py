@@ -45,15 +45,7 @@ class ConcreteIntegerSegmentFactory(factory.django.DjangoModelFactory):  # pylin
     class Meta:  # pylint: disable=R0903 disable=C0115
         model = ConcreteIntegerSegment
 
-    span = factory.SubFactory(ConcreteIntegerSpanFactory)
-    segment_range = factory.LazyAttribute(
-        lambda obj: NumericRange(
-            obj.span.current_range.lower if obj.span.segment_count < 1 else obj.span.last_segment.segment_range.upper,
-            obj.span.current_range.lower + RANGE_DELTA_VALUE
-            if obj.span.segment_count < 1
-            else obj.span.last_segment.segment_range.upper + RANGE_DELTA_VALUE,
-        )
-    )
+    # span = factory.SubFactory(ConcreteIntegerSpanFactory)
 
     @classmethod
     def _create(cls, model_class, *args, **kwargs):
@@ -78,14 +70,6 @@ class ConcreteBigIntegerSegmentFactory(factory.django.DjangoModelFactory):  # py
         model = ConcreteBigIntegerSegment
 
     span = factory.SubFactory(ConcreteBigIntegerSpanFactory)
-    segment_range = factory.LazyAttribute(
-        lambda obj: NumericRange(
-            obj.span.current_range.lower if obj.span.segment_count < 1 else obj.span.last_segment.segment_range.upper,
-            obj.span.current_range.lower + RANGE_DELTA_VALUE
-            if obj.span.segment_count < 1
-            else obj.span.last_segment.segment_range.upper + RANGE_DELTA_VALUE,
-        )
-    )
 
     @classmethod
     def _create(cls, model_class, *args, **kwargs):
@@ -110,14 +94,6 @@ class ConcreteDecimalSegmentFactory(factory.django.DjangoModelFactory):  # pylin
         model = ConcreteDecimalSegment
 
     span = factory.SubFactory(ConcreteDecimalSpanFactory)
-    segment_range = factory.LazyAttribute(
-        lambda obj: NumericRange(
-            obj.span.current_range.lower if obj.span.segment_count < 1 else obj.span.last_segment.segment_range.upper,
-            obj.span.current_range.lower + Decimal(f"{RANGE_DELTA_VALUE}.0")
-            if obj.span.segment_count < 1
-            else obj.span.last_segment.segment_range.upper + Decimal(f"{RANGE_DELTA_VALUE}.0"),
-        )
-    )
 
     @classmethod
     def _create(cls, model_class, *args, **kwargs):
@@ -142,14 +118,6 @@ class ConcreteDateSegmentFactory(factory.django.DjangoModelFactory):  # pylint: 
         model = ConcreteDateSegment
 
     span = factory.SubFactory(ConcreteDateSpanFactory)
-    segment_range = factory.LazyAttribute(
-        lambda obj: DateRange(
-            obj.span.current_range.lower if obj.span.segment_count < 1 else obj.span.last_segment.segment_range.upper,
-            obj.span.current_range.lower + timedelta(days=RANGE_DELTA_VALUE)
-            if obj.span.segment_count < 1
-            else obj.span.last_segment.segment_range.upper + timedelta(days=RANGE_DELTA_VALUE),
-        )
-    )
 
     @classmethod
     def _create(cls, model_class, *args, **kwargs):
@@ -174,14 +142,6 @@ class ConcreteDateTimeSegmentFactory(factory.django.DjangoModelFactory):  # pyli
         model = ConcreteDateTimeSegment
 
     span = factory.SubFactory(ConcreteDateTimeSpanFactory)
-    segment_range = factory.LazyAttribute(
-        lambda obj: DateTimeTZRange(
-            obj.span.current_range.lower if obj.span.segment_count < 1 else obj.span.last_segment.segment_range.upper,
-            obj.span.current_range.lower + timedelta(days=RANGE_DELTA_VALUE)
-            if obj.span.segment_count < 1
-            else obj.span.last_segment.segment_range.upper + timedelta(days=RANGE_DELTA_VALUE),
-        )
-    )
 
     @classmethod
     def _create(cls, model_class, *args, **kwargs):

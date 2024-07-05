@@ -31,7 +31,6 @@ Attributes:
         same attribute on the concrete Span model. The default value is `True`. If `True`, the `deleted_at` field will
         be added to the model and used for soft deletion.
 """
-
 import logging
 from datetime import date, datetime
 from decimal import Decimal
@@ -51,6 +50,7 @@ from django.db.backends.postgresql.psycopg_any import (
     NumericRange,
 )
 from django.db.models.base import ModelBase
+from django.utils import timezone
 
 
 logger = logging.getLogger(__name__)
@@ -65,25 +65,30 @@ POSTGRES_RANGE_FIELDS = getattr(
     settings,
     "POSTGRES_RANGE_FIELDS",
     {
-        IntegerRangeField.__name__: {
-            "type": int,
-            "range": NumericRange,
+        IntegerRangeField: {
+            "value_type": int,
+            "delta_type": int,
+            "range_type": NumericRange,
         },
-        BigIntegerRangeField.__name__: {
-            "type": int,
-            "range": NumericRange,
+        BigIntegerRangeField: {
+            "value_type": int,
+            "delta_type": int,
+            "range_type": NumericRange,
         },
-        DecimalRangeField.__name__: {
-            "type": Decimal,
-            "range": NumericRange,
+        DecimalRangeField: {
+            "value_type": Decimal,
+            "delta_type": Decimal,
+            "range_type": NumericRange,
         },
-        DateRangeField.__name__: {
-            "type": date,
-            "range": DateRange,
+        DateRangeField: {
+            "value_type": date,
+            "delta_type": timezone.timedelta,
+            "range_type": DateRange,
         },
-        DateTimeRangeField.__name__: {
-            "type": datetime,
-            "range": DateTimeTZRange,
+        DateTimeRangeField: {
+            "value_type": datetime,
+            "delta_type": timezone.timedelta,
+            "range_type": DateTimeTZRange,
         },
     },
 )
