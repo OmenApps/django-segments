@@ -91,45 +91,45 @@ class AbstractSpan(models.Model, metaclass=BaseSpanMetaclass):  # pylint: disabl
     class SpanConfig:  # pylint: disable=R0903
         """Configuration options for the span."""
 
-    def get_config_dict(self) -> dict[str, bool]:
+    def _get_config_dict(self) -> dict[str, bool]:
         """Return the configuration options for the span as a dictionary."""
 
         return SpanConfigurationHelper.get_config_dict(self)
 
     @property
-    def range_field_type(self):
+    def _range_field_type(self):
         """Return the range field type."""
         return SpanConfigurationHelper.get_range_field_type(self)
 
-    def get_segment_class(self):
+    def _get_segment_class(self):
         """Get the segment class. This is a helper method to get the segment class associated with this Span."""
         return SpanConfigurationHelper.get_segment_class(self)
 
-    def set_initial_boundaries(
+    def _set_initial_boundaries(
         self, lower_boundary: Union[int, Decimal, datetime, date], upper_boundary: Union[int, Decimal, datetime, date]
     ) -> None:
         """Set both boundaries of the initial range field."""
         self._set_initial_boundaries(lower_boundary, upper_boundary)
 
-    def set_initial_lower_boundary(self, value: Union[int, Decimal, timezone.timedelta]) -> None:
+    def _set_initial_lower_boundary(self, value: Union[int, Decimal, timezone.timedelta]) -> None:
         """Set the lower boundary of the initial range field."""
         self._set_initial_lower_boundary(value)
 
-    def set_initial_upper_boundary(self, value: Union[int, Decimal, timezone.timedelta]) -> None:
+    def _set_initial_upper_boundary(self, value: Union[int, Decimal, timezone.timedelta]) -> None:
         """Set the upper boundary of the initial range field."""
         self._set_initial_upper_boundary(value)
 
-    def set_boundaries(
+    def _set_boundaries(
         self, lower_boundary: Union[int, Decimal, datetime, date], upper_boundary: Union[int, Decimal, datetime, date]
     ) -> None:
         """Set both boundaries of the current range field."""
         self._set_boundaries(lower_boundary, upper_boundary)
 
-    def set_lower_boundary(self, value: Union[int, Decimal, timezone.timedelta]) -> None:
+    def _set_lower_boundary(self, value: Union[int, Decimal, timezone.timedelta]) -> None:
         """Set the lower boundary of the current range field."""
         self._set_lower_boundary(value)
 
-    def set_upper_boundary(self, value: Union[int, Decimal, timezone.timedelta]) -> None:
+    def _set_upper_boundary(self, value: Union[int, Decimal, timezone.timedelta]) -> None:
         """Set the upper boundary of the current range field."""
         self._set_upper_boundary(value)
 
@@ -164,7 +164,7 @@ class AbstractSpan(models.Model, metaclass=BaseSpanMetaclass):  # pylint: disabl
 
     def delete(self) -> None:
         """Delete the Span and its associated Segments."""
-        if self.get_config_dict().get("soft_delete"):
+        if self._get_config_dict().get("soft_delete"):
             # print("soft deleting span")
             DeleteSpanHelper(self).delete()
         else:
@@ -172,7 +172,7 @@ class AbstractSpan(models.Model, metaclass=BaseSpanMetaclass):  # pylint: disabl
             with SpanDeleteSignalContext(self):
                 super().delete()
 
-    def check_and_fix_relationships(self):
+    def _check_and_fix_relationships(self):
         """Check and fix the relationships between the span and its segments."""
         RelationshipHelper(self).check_and_fix_relationships()
 

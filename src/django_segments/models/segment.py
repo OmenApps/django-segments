@@ -109,37 +109,37 @@ class AbstractSegment(models.Model, metaclass=BaseSegmentMetaclass):  # pylint: 
     class SegmentConfig:  # pylint: disable=R0903
         """Configuration options for the segment."""
 
-    def get_config_dict(self) -> dict[str, bool]:
+    def _get_config_dict(self) -> dict[str, bool]:
         """Return a dictionary of configuration options."""
 
         return SegmentConfigurationHelper.get_config_dict(self)
 
     @property
-    def span_config(self):
+    def _span_config(self):
         """Return the configuration options for the segment's parent span."""
         return self.span.get_config_dict()
 
     @property
-    def range_field_type(self):
+    def _range_field_type(self):
         """Return the range field type."""
         return SpanConfigurationHelper.get_range_field_type(self.span)
 
     @staticmethod
-    def create(*, span, segment_range, **kwargs):
+    def _create(*, span, segment_range, **kwargs):
         """Create a new Segment instance."""
         return CreateSegmentHelper(span=span, segment_range=segment_range, **kwargs).create()
 
-    def set_boundaries(
+    def _set_boundaries(
         self, lower_boundary: Union[int, Decimal, datetime, date], upper_boundary: Union[int, Decimal, datetime, date]
     ) -> None:
         """Set both boundaries of the segment range field."""
         self._set_boundaries(lower_boundary, upper_boundary)
 
-    def set_lower_boundary(self, value) -> None:
+    def _set_lower_boundary(self, value) -> None:
         """Set the lower boundary of the segment range field."""
         self._set_lower_boundary(value)
 
-    def set_upper_boundary(self, value) -> None:
+    def _set_upper_boundary(self, value) -> None:
         """Set the upper boundary of the segment range field."""
         self._set_upper_boundary(value)
 
@@ -190,7 +190,7 @@ class AbstractSegment(models.Model, metaclass=BaseSegmentMetaclass):  # pylint: 
 
     def delete(self):
         """Delete the Segment."""
-        if self.get_config_dict().get("soft_delete"):
+        if self._get_config_dict().get("soft_delete"):
             # print("soft deleting segment")
             DeleteSegmentHelper(self).soft_delete()
         else:
