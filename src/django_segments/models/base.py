@@ -84,11 +84,11 @@ def boundary_helper_factory(range_field_name: str) -> tuple:
             )
 
         if lower is not None:
-            validate_value_type(instance=instance, value=lower)
+            _validate_value_type(instance=instance, value=lower)
         if upper is not None:
-            validate_value_type(instance=instance, value=upper)
+            _validate_value_type(instance=instance, value=upper)
 
-        RangeClass = get_range_type(instance)  # pylint: disable=C0103
+        RangeClass = _get_range_type(instance)  # pylint: disable=C0103
 
         if lower is not None:
             print(f"boundary_helper_factory _set_boundary: [{lower=} {model_range_field.upper=})")
@@ -110,7 +110,7 @@ def boundary_helper_factory(range_field_name: str) -> tuple:
         setattr(instance, range_field_name, range_value)
         instance.save()
 
-    def validate_value_type(
+    def _validate_value_type(
         instance: Union[AbstractSpan, AbstractSegment],
         value: Union[int, Decimal, date, datetime],
     ) -> None:
@@ -118,7 +118,7 @@ def boundary_helper_factory(range_field_name: str) -> tuple:
         if value is None:
             raise ValueError("Value cannot be None")
 
-        SpanConfig = get_span_config(instance)  # pylint: disable=C0103
+        SpanConfig = _get_span_config(instance)  # pylint: disable=C0103
 
         if SpanConfig.range_field_type not in POSTGRES_RANGE_FIELDS:
             raise IncorrectRangeTypeError(f"Unsupported field type: {SpanConfig.range_field_type}")
@@ -128,28 +128,10 @@ def boundary_helper_factory(range_field_name: str) -> tuple:
         if not isinstance(value, field_type):
             raise ValueError(f"Value must be of type {field_type}, not {type(value)}")
 
-    # def validate_delta_value_type(
-    #     instance: Union[AbstractSpan, AbstractSegment],
-    #     delta_value: Union[int, Decimal, timezone.timedelta],
-    # ) -> None:
-    #     """Validate the type of the provided delta value against the range_field_type."""
-    #     if delta_value is None:
-    #         raise ValueError("Delta value cannot be None")
-
-    #     SpanConfig = get_span_config(instance)  # pylint: disable=C0103
-
-    #     if SpanConfig.range_field_type not in POSTGRES_RANGE_FIELDS:
-    #         raise IncorrectRangeTypeError(f"Unsupported field type: {SpanConfig.range_field_type}")
-
-    #     delta_type = POSTGRES_RANGE_FIELDS[SpanConfig.range_field_type].get("delta_type")
-
-    #     if not isinstance(delta_value, delta_type):
-    #         raise ValueError(f"Delta value must be of type {delta_type}, not {type(delta_value)}")
-
-    def get_range_type(instance: Union[AbstractSpan, AbstractSegment]):
+    def _get_range_type(instance: Union[AbstractSpan, AbstractSegment]):
         """Get the range class for the instance based on the range_field_type."""
         try:
-            span_config = get_span_config(instance)  # pylint: disable=C0103
+            span_config = _get_span_config(instance)  # pylint: disable=C0103
             RangeClass = POSTGRES_RANGE_FIELDS[span_config.range_field_type]["range_type"]  # pylint: disable=C0103
 
         except AttributeError as e:
@@ -157,13 +139,13 @@ def boundary_helper_factory(range_field_name: str) -> tuple:
 
         return RangeClass
 
-    def get_span_config(instance: Union[AbstractSpan, AbstractSegment]):
+    def _get_span_config(instance: Union[AbstractSpan, AbstractSegment]):
         """Return the SpanConfig class for the instance."""
         if not hasattr(instance, "SpanConfig"):
             instance.SpanConfig = SegmentConfigurationHelper.get_span_model(instance).SpanConfig
         return instance.SpanConfig
 
-    def set_boundaries(
+    def _set_boundaries(
         instance: Union[AbstractSpan, AbstractSegment],
         lower: Union[int, Decimal, date, datetime],
         upper: Union[int, Decimal, date, datetime],
@@ -171,18 +153,18 @@ def boundary_helper_factory(range_field_name: str) -> tuple:
         """Set the lower and upper boundaries of the specified range field."""
         _set_boundary(instance, range_field_name, lower=lower, upper=upper)
 
-    def set_lower_boundary(instance: Union[AbstractSpan, AbstractSegment], value: Union[int, Decimal, date, datetime]):
+    def _set_lower_boundary(instance: Union[AbstractSpan, AbstractSegment], value: Union[int, Decimal, date, datetime]):
         """Set the lower boundary of the specified range field."""
         _set_boundary(instance, range_field_name, lower=value)
 
-    def set_upper_boundary(instance: Union[AbstractSpan, AbstractSegment], value: Union[int, Decimal, date, datetime]):
+    def _set_upper_boundary(instance: Union[AbstractSpan, AbstractSegment], value: Union[int, Decimal, date, datetime]):
         """Set the upper boundary of the specified range field."""
         _set_boundary(instance, range_field_name, upper=value)
 
     return (
-        set_boundaries,
-        set_lower_boundary,
-        set_upper_boundary,
+        _set_boundaries,
+        _set_lower_boundary,
+        _set_upper_boundary,
     )
 
 
@@ -310,21 +292,21 @@ class BaseSpanMetaclass(ModelBase):  # pylint: disable=R0903
         model = super().__new__(cls, name, bases, attrs, **kwargs)  # pylint: disable=E1121
 
         # Validate subclass of AbstractSpan & set initial_range and current_range for the model.
-        if not cls.is_valid_subclass(bases):
+        if not cls._is_valid_subclass(bases):
             raise IncorrectSubclassError("BaseSpanMetaclass applied to incorrect Span MRO")
 
-        cls.setup_span_model(model, name)
+        cls._setup_span_model(model, name)
         model._meta._expire_cache()
         return model
 
     @staticmethod
-    def is_valid_subclass(bases):
+    def _is_valid_subclass(bases):
         """Check if the metaclass is applied to the correct subclass."""
         base_list = [base.__name__ for base in bases]
         return any([(len(base_list) == 1 and base_list[0] == "Model"), "AbstractSpan" in base_list])
 
     @classmethod
-    def setup_span_model(cls, model, name):
+    def _setup_span_model(cls, model, name):
         """Set up the span model."""
         if "AbstractSpan" in [base.__name__ for base in model.__bases__]:
             ConcreteModelValidationHelper.check_model_is_concrete(model)
@@ -338,11 +320,11 @@ class BaseSpanMetaclass(ModelBase):  # pylint: disable=R0903
                 "current_range", config_dict["range_field_type"](_("Current Range"), blank=True, null=True)
             )
             model_short_hash = generate_short_hash(name)
-            cls.add_indexes(model, model_short_hash)
-            cls.add_soft_delete_field(model, model_short_hash, config_dict)
+            cls._add_indexes(model, model_short_hash)
+            cls._add_soft_delete_field(model, model_short_hash, config_dict)
 
     @staticmethod
-    def add_indexes(model, model_short_hash):
+    def _add_indexes(model, model_short_hash):
         """Add indexes for the initial_range and current_range fields."""
         indexes_list = list(model._meta.indexes)  # pylint: disable=W0212
         indexes_list.extend(
@@ -354,7 +336,7 @@ class BaseSpanMetaclass(ModelBase):  # pylint: disable=R0903
         model._meta.indexes = indexes_list  # pylint: disable=W0212
 
     @staticmethod
-    def add_soft_delete_field(model, model_short_hash, config_dict):
+    def _add_soft_delete_field(model, model_short_hash, config_dict):
         """Add a deleted_at field to the model if soft_delete is enabled."""
         if config_dict["soft_delete"]:
             model.add_to_class(
@@ -398,21 +380,21 @@ class BaseSegmentMetaclass(ModelBase):  # pylint: disable=R0903
         model = super().__new__(cls, name, bases, attrs, **kwargs)  # pylint: disable=E1121
 
         # Validate subclass of AbstractSegment & set segment_range and span for the concrete model.
-        if not cls.is_valid_subclass(bases):
+        if not cls._is_valid_subclass(bases):
             raise IncorrectSubclassError("BaseSegmentMetaclass applied to incorrect Segment MRO")
 
-        cls.setup_segment_model(model, name)
+        cls._setup_segment_model(model, name)
         model._meta._expire_cache()
         return model
 
     @staticmethod
-    def is_valid_subclass(bases):
+    def _is_valid_subclass(bases):
         """Check if the model is a valid subclass of AbstractSegment."""
         base_list = [base.__name__ for base in bases]
         return any([(len(base_list) == 1 and base_list[0] == "Model"), "AbstractSegment" in base_list])
 
     @classmethod
-    def setup_segment_model(cls, model, name):
+    def _setup_segment_model(cls, model, name):
         """Set up the segment model."""
         if "AbstractSegment" in [base.__name__ for base in model.__bases__]:
             ConcreteModelValidationHelper.check_model_is_concrete(model)
@@ -445,19 +427,19 @@ class BaseSegmentMetaclass(ModelBase):  # pylint: disable=R0903
             )
 
             model_short_hash = generate_short_hash(name)
-            cls.add_indexes(model, model_short_hash)
-            cls.add_constraints(model, model_short_hash)
-            cls.add_soft_delete_field(model, model_short_hash, config_dict)
+            cls._add_indexes(model, model_short_hash)
+            cls._add_constraints(model, model_short_hash)
+            cls._add_soft_delete_field(model, model_short_hash, config_dict)
 
     @classmethod
-    def add_indexes(cls, model, model_short_hash):
+    def _add_indexes(cls, model, model_short_hash):
         """Add the segment_range index to the model."""
         indexes_list = list(model._meta.indexes)  # pylint: disable=W0212
         indexes_list.append(models.Index(fields=["segment_range"], name=f"segment_range_idx_{model_short_hash}"))
         model._meta.indexes = indexes_list  # pylint: disable=W0212
 
     @classmethod
-    def add_constraints(cls, model, model_short_hash):
+    def _add_constraints(cls, model, model_short_hash):
         """Ensure that the segment_range does not overlap with other segments associated with the same span."""
         constraints_list = list(model._meta.constraints)  # pylint: disable=W0212
         constraints_list.append(
@@ -470,7 +452,7 @@ class BaseSegmentMetaclass(ModelBase):  # pylint: disable=R0903
         model._meta.constraints = constraints_list  # pylint: disable=W0212
 
     @classmethod
-    def add_soft_delete_field(cls, model, model_short_hash, config_dict):
+    def _add_soft_delete_field(cls, model, model_short_hash, config_dict):
         """Add the deleted_at field to the model if soft_delete is enabled."""
         if config_dict["soft_delete"]:
             model.add_to_class(
