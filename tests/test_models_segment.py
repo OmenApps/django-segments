@@ -251,3 +251,9 @@ class TestSegmentAdditional:
         assert new_segment.segment_range.lower == split_value
         assert new_segment.previous_segment == segment
         assert segment.next_segment == new_segment
+
+    def test_split_segment_at_upper_boundary(self, integer_segment):
+        """Test splitting the segment exactly at the upper boundary."""
+        helper = SplitSegmentHelper(integer_segment)
+        with pytest.raises(ValueError):
+            helper.split(split_value=integer_segment.segment_range.upper)

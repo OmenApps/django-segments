@@ -255,25 +255,6 @@ class TestShiftUpperSegmentHelper:
 
 
 @pytest.mark.django_db
-class TestSplitSegmentHelper:
-    """Tests for the SplitSegmentHelper class."""
-
-    def test_split_segment(self, integer_segment):
-        """Test splitting the segment into two at a specific value."""
-        helper = SplitSegmentHelper(integer_segment)
-        split_value = integer_segment.segment_range.lower + 2
-        new_segment = helper.split(split_value=split_value)
-        assert new_segment.segment_range.lower == split_value
-        assert new_segment.span == integer_segment.span
-
-    def test_split_segment_at_upper_boundary(self, integer_segment):
-        """Test splitting the segment exactly at the upper boundary."""
-        helper = SplitSegmentHelper(integer_segment)
-        with pytest.raises(ValueError):
-            helper.split(split_value=integer_segment.segment_range.upper)
-
-
-@pytest.mark.django_db
 class TestDeleteSegmentHelper:
     """Tests for the DeleteSegmentHelper class."""
 
