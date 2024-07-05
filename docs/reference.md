@@ -114,7 +114,7 @@ more of the corresponding setting names in lowercase to the segment model. Examp
 
     The behavior to use when deleting a segment that has a previous segment. Default is :attr:`django.db.models.CASCADE`.
 
--- data:: SPAN_ON_DELETE
+.. data:: SPAN_ON_DELETE
 
     The behavior to use for segment instances with foreign key to a deleted span. Default is :attr:`django.db.models.CASCADE`.
 
