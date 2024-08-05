@@ -2,7 +2,7 @@ pip==24.0
 pipx==1.5.0
 nox==2024.4.15
 nox-poetry==1.0.3
-playwright==1.44.0
+playwright==1.45.1
 poetry==1.8.3
 poetry-plugin-export==1.8.0
 pytest==8.2.1
